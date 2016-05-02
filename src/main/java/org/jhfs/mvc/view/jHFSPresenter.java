@@ -2,6 +2,7 @@ package org.jhfs.mvc.view;
 
 import com.google.gson.Gson;
 import javafx.collections.ObservableList;
+import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -9,6 +10,7 @@ import javafx.scene.input.DataFormat;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.TransferMode;
+import javafx.scene.layout.GridPane;
 import javafx.stage.Stage;
 import org.jhfs.mvc.model.Configuration;
 import org.jhfs.mvc.model.VirtualFile;
@@ -211,7 +213,31 @@ public class jHFSPresenter {
                 .getResource("images/properties.png").toExternalForm()));
 
         properties.setOnAction(event -> {
+            final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+            if (selectedItem != null && !selectedItem.getValue().getName().equals("/")) {
+                GridPane gridPane = new GridPane();
+                gridPane.setHgap(10);
+                gridPane.setVgap(10);
+                gridPane.setPadding(new Insets(8, 8, 8, 8));
 
+                final File file = new File(selectedItem.getValue().getPath());
+                ImageView imageView = new ImageView(getClass().getClassLoader().getResource(file.isDirectory() ?
+                        "images/folder48x48.png" : "images/archive48x48.png").toExternalForm());
+                imageView.setPreserveRatio(true);
+                gridPane.addRow(0, imageView, new Label(selectedItem.getValue().getVirtualName()));
+                gridPane.addRow(1, new Label("Type:"), new Label(file.exists() && file.isDirectory() ? "Directory" : "File"));
+                gridPane.addRow(2, new Label("Name:"), new Label(selectedItem.getValue().getName()));
+                gridPane.addRow(3, new Label("Path:"), new Label(selectedItem.getValue().getPath()));
+
+                Alert alert = new Alert(Alert.AlertType.NONE);
+                final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
+                window.getIcons().add(new Image(getClass().getClassLoader()
+                        .getResource("images/icon.png").toExternalForm()));
+                alert.getButtonTypes().add(ButtonType.CLOSE);
+                alert.getDialogPane().setContent(gridPane);
+
+                alert.showAndWait();
+            }
         });
 
         hfsView.fileSystem.setContextMenu(new ContextMenu(remove, rename, properties));
