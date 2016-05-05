@@ -1,6 +1,5 @@
 package org.jhfs.mvc.view;
 
-import com.google.gson.Gson;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -11,19 +10,21 @@ import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import org.jhfs.mvc.model.Configuration;
-import org.jhfs.mvc.model.VirtualFile;
+import javafx.util.StringConverter;
+import org.jhfs.core.Configuration;
+import org.jhfs.core.ConfigurationUtil;
+import org.jhfs.core.VirtualFile;
 import sun.net.util.IPAddressUtil;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.ArrayList;
-import java.util.Enumeration;
+import java.util.Collections;
 
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
@@ -46,7 +47,7 @@ public class jHFSPresenter {
         this.hfsView = hfsView;
         this.urlFormat = "http://%s/";
         this.portFormat = "Port: %d";
-        this.configuration = loadConfiguration();
+        this.configuration = ConfigurationUtil.loadConfiguration();
 
         attachEvents();
     }
@@ -104,6 +105,45 @@ public class jHFSPresenter {
         createUrlCombo();
 
         applyConfiguration();
+
+        selectInterface();
+    }
+
+    private void selectInterface() {
+        if (hfsView.urlCombo.getItems().size() > 1) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+
+            Label label = new Label("Please, select the interface from which the server will start");
+
+            ComboBox<InetAddress> comboBox = new ComboBox<>();
+            comboBox.setMaxWidth(Double.MAX_VALUE);
+            comboBox.setConverter(new StringConverter<InetAddress>() {
+                @Override
+                public String toString(InetAddress object) {
+                    return String.format("http://%s/", object.getHostAddress());
+                }
+
+                @Override
+                public InetAddress fromString(String string) {
+                    return null;
+                }
+            });
+            hfsView.urlCombo.getItems().forEach(inetAddress -> comboBox.getItems().add(inetAddress));
+            comboBox.getSelectionModel().selectFirst();
+
+            VBox vBox = new VBox(label, comboBox);
+            vBox.setPadding(new Insets(8, 8, 8, 8));
+
+            alert.getDialogPane().setContent(vBox);
+            alert.getButtonTypes().remove(ButtonType.CANCEL);
+
+            final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
+            window.getIcons().add(new Image(getClass().getClassLoader()
+                    .getResource("images/icon.png").toExternalForm()));
+
+            alert.showAndWait();
+            hfsView.urlCombo.getSelectionModel().select(comboBox.getSelectionModel().getSelectedItem());
+        }
     }
 
     private void createTreeItem(File file, String virtualName) {
@@ -158,17 +198,19 @@ public class jHFSPresenter {
 
     private void createUrlCombo() {
         try {
-            final Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
-            while (networkInterfaces.hasMoreElements()) {
-                final NetworkInterface networkInterface = networkInterfaces.nextElement();
-                if (!networkInterface.isLoopback()) {
-                    networkInterface.getInterfaceAddresses()
-                            .stream()
-                            .filter(i -> IPAddressUtil.isIPv4LiteralAddress(i.getAddress().getHostAddress()))
-                            .map(i -> i.getAddress().getHostAddress())
-                            .forEach(s -> hfsView.urlCombo.getItems().add(String.format(urlFormat, s)));
-                }
-            }
+            Collections.list(NetworkInterface.getNetworkInterfaces())
+                    .stream()
+                    .filter(networkInterface -> {
+                        try {
+                            return !networkInterface.isLoopback();
+                        } catch (SocketException e) {
+                            return false;
+                        }
+                    })
+                    .flatMap(networkInterface -> networkInterface.getInterfaceAddresses().stream())
+                    .filter(interfaceAddress -> IPAddressUtil.isIPv4LiteralAddress(interfaceAddress.getAddress().getHostAddress()))
+                    .map(InterfaceAddress::getAddress)
+                    .forEach(inetAddress -> hfsView.urlCombo.getItems().add(inetAddress));
 
             hfsView.urlCombo.getSelectionModel().selectFirst();
         } catch (SocketException e) {
@@ -243,36 +285,7 @@ public class jHFSPresenter {
         hfsView.fileSystem.setContextMenu(new ContextMenu(remove, rename, properties));
     }
 
-    private Configuration loadConfiguration(String fileName) {
-        Configuration conf = null;
-
-        try (FileReader fr = new FileReader(new File(fileName))) {
-            Gson g = new Gson();
-            conf = g.fromJson(fr, Configuration.class);
-        } catch (IOException ignored) {
-        } finally {
-            if (conf == null) conf = new Configuration();
-        }
-
-        return conf;
-    }
-
-    private Configuration loadConfiguration() {
-        return loadConfiguration("configuration.json");
-    }
-
-    private void saveConfiguration(String fileName, Configuration conf) {
-        try (FileWriter fw = new FileWriter(new File(fileName))) {
-            new Gson().toJson(conf, fw);
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void saveConfiguration(Configuration conf) {
-        saveConfiguration("configuration.json", conf);
-    }
-
     public void saveConfiguration() {
-        saveConfiguration(configuration);
+        ConfigurationUtil.saveConfiguration(configuration);
     }
 }

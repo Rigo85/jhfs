@@ -1,4 +1,4 @@
-package org.jhfs.mvc.model;
+package org.jhfs.core;
 
 import com.google.gson.annotations.SerializedName;
 

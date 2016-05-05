@@ -10,24 +10,35 @@
  * AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.
  */
 
-group 'org.jhfs'
-version '1.0-SNAPSHOT'
+allprojects {
+    group 'org.jhfs'
+    version '1.0'
+    apply plugin: 'java'
 
-apply plugin: 'java'
+    repositories {
+        maven { url = 'http://maven.prod.uci.cu/nexus/content/groups/public/' }
+        maven { url = 'http://maven.prod.uci.cu/nexus/content/repositories/' }
+        maven { url = 'http://maven.prod.uci.cu/nexus/content/repositories/clojars.org/' }
+        maven { url = 'http://maven.prod.uci.cu/nexus/content/repositories/idGradlePlugins/' }
+//        mavenCentral()
+    }
+
+}
+
+project(':core') {
+    sourceCompatibility = 1.8
+
+    dependencies {
+        compile 'io.netty:netty-all:4.1.0.CR7'
+        compile 'com.google.code.gson:gson:2.6.2'
+    }
+}
 
 sourceCompatibility = 1.8
 
-repositories {
-    //    mavenCentral()
-    maven { url = 'http://maven.prod.uci.cu/nexus/content/groups/public/' }
-    maven { url = 'http://maven.prod.uci.cu/nexus/content/repositories/' }
-    maven { url = 'http://maven.prod.uci.cu/nexus/content/repositories/clojars.org/' }
-    maven { url = 'http://maven.prod.uci.cu/nexus/content/repositories/idGradlePlugins/' }
-}
-
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.11'
-    compile 'com.google.code.gson:gson:2.6.2'
+    compile project(':core')
 }
 
 task fatJar(type: Jar) {

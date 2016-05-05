@@ -10,8 +10,17 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.StringConverter;
 import org.jhfs.mvc.model.Connection;
-import org.jhfs.mvc.model.VirtualFile;
+import org.jhfs.core.VirtualFile;
+
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
@@ -29,7 +38,7 @@ public class jHFSView extends BorderPane {
     Button portBtn;
     Button openInBrowserBtn;
     Button copyToClipBoardBtn;
-    ComboBox<String> urlCombo;
+    ComboBox<InetAddress> urlCombo;
     TableView<Connection> connections;
     TreeView<VirtualFile> fileSystem;
     TextArea logs;
@@ -68,6 +77,38 @@ public class jHFSView extends BorderPane {
                 .getResource("images/browser.png").toExternalForm()));
 
         urlCombo = new ComboBox<>();
+        urlCombo.setConverter(new StringConverter<InetAddress>() {
+            @Override
+            public String toString(InetAddress object) {
+                return String.format("http://%s/", object.getHostAddress());
+            }
+
+            @Override
+            public InetAddress fromString(String string) {
+                List<Short> result;
+                InetAddress address;
+                final String replace = string.replace("http://", "");
+                final String replace1 = replace.replace("/", "");
+
+                try {
+                    result = Stream.of(replace1.split("\\.")).map(Short::new).collect(Collectors.toList());
+                } catch (NumberFormatException ignored) {
+                    result = Collections.emptyList();
+                }
+
+                AtomicInteger pos = new AtomicInteger(0);
+                byte[] bytes = new byte[result.size()];
+                result.stream().forEach(aShort -> bytes[pos.getAndIncrement()] = aShort.byteValue());
+
+                try {
+                    address = InetAddress.getByAddress(bytes);
+                } catch (UnknownHostException e) {
+                    address = InetAddress.getLoopbackAddress();
+                }
+
+                return  address;
+            }
+        });
         urlCombo.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(urlCombo, Priority.ALWAYS);
 
