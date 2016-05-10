@@ -1,6 +1,7 @@
 package org.jhfs.mvc.view;
 
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
@@ -10,12 +11,14 @@ import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
-import org.jhfs.core.Configuration;
-import org.jhfs.core.ConfigurationUtil;
-import org.jhfs.core.VirtualFile;
+import org.jhfs.core.model.Configuration;
+import org.jhfs.core.model.ConfigurationUtil;
+import org.jhfs.core.model.VirtualFile;
+import org.jhfs.core.server.HttpFileServer;
 import sun.net.util.IPAddressUtil;
 
 import java.io.File;
@@ -23,8 +26,13 @@ import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
@@ -38,21 +46,53 @@ import java.util.Collections;
  * AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.
  */
 public class jHFSPresenter {
-    jHFSView hfsView;
-    String urlFormat;
-    String portFormat;
-    Configuration configuration;
+    private final HttpFileServer httpFileServer;
+    private jHFSView hfsView;
+    private String portFormat;
+    private Configuration configuration;
 
     public jHFSPresenter(jHFSView hfsView) {
         this.hfsView = hfsView;
-        this.urlFormat = "http://%s/";
         this.portFormat = "Port: %d";
         this.configuration = ConfigurationUtil.loadConfiguration();
 
         attachEvents();
+
+        this.httpFileServer = new HttpFileServer(configuration, hfsView.urlCombo.getValue());
+
+        final Task<Object> task = new Task<Object>() {
+            @Override
+            protected Object call() throws Exception {
+                httpFileServer.start();
+                return null;
+            }
+        };
+
+        //todo be able to change the port at this time.
+        task.exceptionProperty().addListener((observable, oldValue, e) -> {
+            String sb = e.getMessage() +
+                    "\n\n" +
+                    "Please check firewall configuration," +
+                    "\n" +
+                    String.format("or the port %d is being used by another service", configuration.getPort()) +
+                    ".\n" +
+                    "On GNU/Linux systems to run services that listen on ports 1-1024 you need to run them as root user";
+            Alert alert = new Alert(Alert.AlertType.ERROR, sb, ButtonType.CLOSE);
+            alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+            final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
+            window.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
+            alert.showAndWait();
+            System.exit(0);
+        });
+
+        new Thread(task).start();
     }
 
     private void attachEvents() {
+        applyConfiguration();
+
+        watchLogs();
+
         hfsView.menuBtn.setOnMousePressed(event -> {
             if (event.getButton() == MouseButton.PRIMARY) {
                 hfsView.menu.show(hfsView.menuBtn, event.getScreenX(), event.getScreenY());
@@ -70,11 +110,8 @@ public class jHFSPresenter {
 
         hfsView.fileSystem.setOnDragDropped(e -> {
             Dragboard dragboard = e.getDragboard();
-
             for (DataFormat dataFormat : dragboard.getContentTypes()) {
-
                 final Object content = dragboard.getContent(dataFormat);
-
                 if (content != null &&
                         content instanceof ArrayList &&
                         !((ArrayList) content).isEmpty() &&
@@ -83,7 +120,6 @@ public class jHFSPresenter {
                     ((ArrayList<File>) content).stream().forEach(this::createTreeItem);
                 }
             }
-
             e.consume();
         });
 
@@ -104,9 +140,27 @@ public class jHFSPresenter {
 
         createUrlCombo();
 
-        applyConfiguration();
-
         selectInterface();
+    }
+
+    private void watchLogs() {
+        final Path path = Paths.get(System.getProperty("user.dir"), "jHFS.log");
+        if (Files.exists(path)) {
+            loadFile();
+        }
+
+        WatchThread watchThread = new WatchThread(path, this);
+        watchThread.setDaemon(true);
+        watchThread.start();
+    }
+
+    void loadFile() {
+        try {
+            String stringFromFile = Files.lines(Paths.get("jHFS.log")).collect(Collectors.joining("\n"));
+            hfsView.logs.setText(stringFromFile);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void selectInterface() {
@@ -146,31 +200,41 @@ public class jHFSPresenter {
         }
     }
 
-    private void createTreeItem(File file, String virtualName) {
+    private void createTreeItem(File file) {
         if (hfsView.fileSystem
                 .getRoot()
                 .getChildren()
                 .stream()
                 .noneMatch(item -> item.getValue()
-                        .getPath().equals(file.getAbsolutePath()))) {
+                        .getBasePath().equals(file.getAbsolutePath()))) {
 
-            final VirtualFile virtualFile = new VirtualFile(file.getName(), virtualName, file.getAbsolutePath());
+            final VirtualFile virtualFile = new VirtualFile(file.getName(), file.getParent());
 
-            hfsView.fileSystem
-                    .getRoot()
-                    .getChildren()
-                    .add(new TreeItem<>(virtualFile,
-                            new ImageView(getClass().getClassLoader()
-                                    .getResource(file.isDirectory() ?
-                                            "images/folder.png" : "images/archive.png")
-                                    .toExternalForm())));
+            final TreeItem<VirtualFile> virtualFileTreeItem = new TreeItem<VirtualFile>(virtualFile,
+                    new ImageView(getClass().getClassLoader()
+                            .getResource(file.isDirectory() ?
+                                    "images/folder.png" : "images/archive.png")
+                            .toExternalForm())) {
+                @Override
+                public boolean equals(Object obj) {
+                    if (this == obj) return true;
+                    if (!(obj instanceof TreeItem)) return false;
+
+                    TreeItem<VirtualFile> that = (TreeItem<VirtualFile>) obj;
+
+                    return this.getValue().equals(that.getValue());
+                }
+            };
+
+            if (!hfsView.fileSystem.getRoot().getChildren().contains(virtualFileTreeItem)) {
+                hfsView.fileSystem
+                        .getRoot()
+                        .getChildren()
+                        .add(virtualFileTreeItem);
+            }
 
             configuration.addVirtualFile(virtualFile);
         }
-    }
-
-    private void createTreeItem(File file) {
-        createTreeItem(file, file.getName());
     }
 
     private void applyConfiguration() {
@@ -180,7 +244,14 @@ public class jHFSPresenter {
             final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
             window.getIcons().add(new Image(getClass().getClassLoader()
                     .getResource("images/icon.png").toExternalForm()));
-            alert.showAndWait().filter(b -> b == ButtonType.YES).ifPresent(e -> fillFileSystemTree());
+
+            final Optional<ButtonType> buttonType = alert.showAndWait();
+
+            if (buttonType.isPresent() && buttonType.get() == ButtonType.YES) {
+                fillFileSystemTree();
+            } else {
+                configuration = new Configuration();
+            }
         }
     }
 
@@ -189,9 +260,9 @@ public class jHFSPresenter {
         configuration.getFileSystem().clear();
 
         fileSystem.stream().forEach(virtualFile -> {
-            File file = new File(virtualFile.getPath());
+            File file = Paths.get(virtualFile.getBasePath(), virtualFile.getName()).toFile();
             if (file.exists()) {
-                createTreeItem(file, virtualFile.getVirtualName());
+                createTreeItem(file);
             }
         });
     }
@@ -225,29 +296,12 @@ public class jHFSPresenter {
             final ObservableList<TreeItem<VirtualFile>> selectedItems =
                     hfsView.fileSystem.getSelectionModel().getSelectedItems();
             if (selectedItems != null) {
-                hfsView.fileSystem
-                        .getRoot()
-                        .getChildren()
-                        .removeAll(selectedItems
-                                .filtered(item -> !item.getValue().getName().equals("/")));
-            }
-        });
-
-        MenuItem rename = new MenuItem("Rename", new ImageView(getClass().getClassLoader()
-                .getResource("images/rename.png").toExternalForm()));
-
-        rename.setOnAction(event -> {
-            final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
-            if (selectedItem != null && !selectedItem.getValue().getName().equals("/")) {
-                TextInputDialog inputDialog = new TextInputDialog(selectedItem.getValue().getVirtualName());
-                inputDialog.setHeaderText("New virtual name");
-                inputDialog.setTitle("Rename");
-                final Stage window = (Stage) inputDialog.getDialogPane().getScene().getWindow();
-                window.getIcons().add(new Image(getClass().getClassLoader()
-                        .getResource("images/icon.png").toExternalForm()));
-                selectedItem.getValue().setVirtualName(inputDialog.showAndWait()
-                        .orElse(selectedItem.getValue().getVirtualName()));
-                hfsView.fileSystem.refresh();
+                selectedItems
+                        .filtered(item -> !item.getValue().getName().equals("/"))
+                        .stream().forEach(virtualFileTreeItem -> {
+                    hfsView.fileSystem.getRoot().getChildren().remove(virtualFileTreeItem);
+                    configuration.removeVirtualFile(virtualFileTreeItem.getValue());
+                });
             }
         });
 
@@ -262,14 +316,13 @@ public class jHFSPresenter {
                 gridPane.setVgap(10);
                 gridPane.setPadding(new Insets(8, 8, 8, 8));
 
-                final File file = new File(selectedItem.getValue().getPath());
+                final File file = new File(selectedItem.getValue().getBasePath());
                 ImageView imageView = new ImageView(getClass().getClassLoader().getResource(file.isDirectory() ?
                         "images/folder48x48.png" : "images/archive48x48.png").toExternalForm());
                 imageView.setPreserveRatio(true);
-                gridPane.addRow(0, imageView, new Label(selectedItem.getValue().getVirtualName()));
+                gridPane.addRow(0, imageView, new Label(selectedItem.getValue().getName()));
                 gridPane.addRow(1, new Label("Type:"), new Label(file.exists() && file.isDirectory() ? "Directory" : "File"));
-                gridPane.addRow(2, new Label("Name:"), new Label(selectedItem.getValue().getName()));
-                gridPane.addRow(3, new Label("Path:"), new Label(selectedItem.getValue().getPath()));
+                gridPane.addRow(2, new Label("Path:"), new Label(selectedItem.getValue().getBasePath()));
 
                 Alert alert = new Alert(Alert.AlertType.NONE);
                 final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
@@ -282,7 +335,7 @@ public class jHFSPresenter {
             }
         });
 
-        hfsView.fileSystem.setContextMenu(new ContextMenu(remove, rename, properties));
+        hfsView.fileSystem.setContextMenu(new ContextMenu(remove, properties));
     }
 
     public void saveConfiguration() {

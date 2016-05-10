@@ -11,8 +11,8 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.StringConverter;
+import org.jhfs.core.model.VirtualFile;
 import org.jhfs.mvc.model.Connection;
-import org.jhfs.core.VirtualFile;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;

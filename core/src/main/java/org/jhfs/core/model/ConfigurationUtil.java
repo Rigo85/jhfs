@@ -1,4 +1,4 @@
-package org.jhfs.core;
+package org.jhfs.core.model;
 
 import com.google.gson.Gson;
 
@@ -19,7 +19,7 @@ import java.io.IOException;
  * AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.
  */
 public class ConfigurationUtil {
-    static public Configuration loadConfiguration(String fileName) {
+    private static Configuration loadConfiguration(String fileName) {
         Configuration conf = null;
 
         try (FileReader fr = new FileReader(new File(fileName))) {
@@ -33,7 +33,7 @@ public class ConfigurationUtil {
         return conf;
     }
 
-    static public void saveConfiguration(String fileName, Configuration conf) {
+    private static void saveConfiguration(String fileName, Configuration conf) {
         try (FileWriter fw = new FileWriter(new File(fileName))) {
             new Gson().toJson(conf, fw);
         } catch (Exception ignored) {

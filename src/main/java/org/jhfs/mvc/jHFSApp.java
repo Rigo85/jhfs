@@ -10,6 +10,8 @@ import org.jhfs.mvc.view.jHFSPresenter;
 import org.jhfs.mvc.view.jHFSView;
 
 import java.awt.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
@@ -118,14 +120,14 @@ public class jHFSApp extends Application {
             alert.showAndWait().filter(b -> b == ButtonType.YES).ifPresent(e -> jHFSPresenter.saveConfiguration());
         });
 
-        stage.getIcons().add(new Image(
-                getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
+        stage.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
 
         stage.show();
     }
 
-//    @Override
-//    public void stop() throws Exception {
-//        System.exit(0);
-//    }
+    @Override
+    public void stop() throws Exception {
+        Files.deleteIfExists(Paths.get(System.getProperty("user.dir"), "jHFS.log"));
+        System.exit(0);
+    }
 }

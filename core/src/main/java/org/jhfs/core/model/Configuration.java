@@ -1,4 +1,4 @@
-package org.jhfs.core;
+package org.jhfs.core.model;
 
 import com.google.gson.annotations.SerializedName;
 
@@ -17,13 +17,13 @@ import java.util.ArrayList;
  */
 public class Configuration {
     @SerializedName("port")
-    int port;
+    private int port;
 
     @SerializedName("fileSystem")
-    ArrayList<VirtualFile> fileSystem;
+    private ArrayList<VirtualFile> fileSystem;
 
     public Configuration() {
-        this.port = 80;
+        this.port = 8080;
         this.fileSystem = new ArrayList<>();
     }
 
@@ -43,7 +43,11 @@ public class Configuration {
         this.fileSystem = fileSystem;
     }
 
-    public void addVirtualFile(VirtualFile virtualFile){
+    public void addVirtualFile(VirtualFile virtualFile) {
         this.fileSystem.add(virtualFile);
+    }
+
+    public boolean removeVirtualFile(VirtualFile virtualFile) {
+        return this.fileSystem.remove(virtualFile);
     }
 }

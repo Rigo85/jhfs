@@ -31,6 +31,10 @@ project(':core') {
     dependencies {
         compile 'io.netty:netty-all:4.1.0.CR7'
         compile 'com.google.code.gson:gson:2.6.2'
+        compile 'com.google.guava:guava-io:r03'
+        compile 'org.slf4j:slf4j-api:1.7.21'
+        compile 'ch.qos.logback:logback-classic:1.1.5'
+        compile 'ch.qos.logback:logback-core:1.1.5'
     }
 }
 
@@ -54,4 +58,9 @@ task fatJar(type: Jar) {
         exclude "META-INF/*.RSA"
     }
     with jar
+}
+
+task run(type: JavaExec) {
+    main = "org.jhfs.mvc.jHFSApp"
+    classpath = sourceSets.main.runtimeClasspath
 }
