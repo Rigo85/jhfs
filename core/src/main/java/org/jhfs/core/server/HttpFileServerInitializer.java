@@ -6,6 +6,9 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
+import org.jhfs.core.model.Connection;
 import org.jhfs.core.model.VirtualFile;
 
 import java.util.ArrayList;
@@ -24,9 +27,13 @@ import java.util.ArrayList;
 class HttpFileServerInitializer extends ChannelInitializer<SocketChannel> {
 
     final private ArrayList<VirtualFile> virtualFiles;
+    final private TextArea logs;
+    final private TableView<Connection> connections;
 
-    HttpFileServerInitializer(ArrayList<VirtualFile> virtualFiles) {
+    HttpFileServerInitializer(ArrayList<VirtualFile> virtualFiles, TextArea logs, TableView<Connection> connections) {
         this.virtualFiles = virtualFiles;
+        this.logs = logs;
+        this.connections = connections;
     }
 
     @Override
@@ -36,6 +43,6 @@ class HttpFileServerInitializer extends ChannelInitializer<SocketChannel> {
         pipeline.addLast(new HttpObjectAggregator(65536));
         pipeline.addLast(new ChunkedWriteHandler());
         pipeline.addLast(new FavIconHandler("images/favicon.ico"));
-        pipeline.addLast(new HttpFileServerHandler(virtualFiles));
+        pipeline.addLast(new HttpFileServerHandler(virtualFiles, logs, connections));
     }
 }

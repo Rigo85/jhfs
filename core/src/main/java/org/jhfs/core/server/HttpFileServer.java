@@ -7,7 +7,10 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
 import org.jhfs.core.model.Configuration;
+import org.jhfs.core.model.Connection;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -27,10 +30,14 @@ public final class HttpFileServer {
 
     private final Configuration configuration;
     private final InetAddress address;
+    private final TextArea logs;
+    private final TableView<Connection> connections;
 
-    public HttpFileServer(Configuration configuration, InetAddress address) {
+    public HttpFileServer(Configuration configuration, InetAddress address, TextArea logs, TableView<Connection> connections) {
         this.configuration = configuration;
         this.address = address;
+        this.logs = logs;
+        this.connections = connections;
     }
 
     public void start() throws InterruptedException {
@@ -42,7 +49,7 @@ public final class HttpFileServer {
                     .channel(NioServerSocketChannel.class)
                     .localAddress(new InetSocketAddress(address, configuration.getPort()))
                     .handler(new LoggingHandler(LogLevel.INFO))
-                    .childHandler(new HttpFileServerInitializer(configuration.getFileSystem()));
+                    .childHandler(new HttpFileServerInitializer(configuration.getFileSystem(), logs, connections));
 
             Channel ch = b.bind().sync().channel();
 

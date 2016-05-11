@@ -26,13 +26,10 @@ import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
@@ -58,7 +55,8 @@ public class jHFSPresenter {
 
         attachEvents();
 
-        this.httpFileServer = new HttpFileServer(configuration, hfsView.urlCombo.getValue());
+        this.httpFileServer = new HttpFileServer(configuration, hfsView.urlCombo.getValue(), hfsView.logs,
+                hfsView.connections);
 
         final Task<Object> task = new Task<Object>() {
             @Override
@@ -90,8 +88,6 @@ public class jHFSPresenter {
 
     private void attachEvents() {
         applyConfiguration();
-
-        watchLogs();
 
         hfsView.menuBtn.setOnMousePressed(event -> {
             if (event.getButton() == MouseButton.PRIMARY) {
@@ -141,26 +137,6 @@ public class jHFSPresenter {
         createUrlCombo();
 
         selectInterface();
-    }
-
-    private void watchLogs() {
-        final Path path = Paths.get(System.getProperty("user.dir"), "jHFS.log");
-        if (Files.exists(path)) {
-            loadFile();
-        }
-
-        WatchThread watchThread = new WatchThread(path, this);
-        watchThread.setDaemon(true);
-        watchThread.start();
-    }
-
-    void loadFile() {
-        try {
-            String stringFromFile = Files.lines(Paths.get("jHFS.log")).collect(Collectors.joining("\n"));
-            hfsView.logs.setText(stringFromFile);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     private void selectInterface() {

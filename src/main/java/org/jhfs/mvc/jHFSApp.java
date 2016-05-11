@@ -10,8 +10,6 @@ import org.jhfs.mvc.view.jHFSPresenter;
 import org.jhfs.mvc.view.jHFSView;
 
 import java.awt.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
@@ -38,7 +36,7 @@ public class jHFSApp extends Application {
         jHFSView hfsView = new jHFSView();
         final jHFSPresenter jHFSPresenter = new jHFSPresenter(hfsView);
 
-        Scene scene = new Scene(hfsView, 700, 400);
+        Scene scene = new Scene(hfsView, 1000, 400);
         stage.setScene(scene);
         stage.setTitle("jHFS");
 
@@ -127,7 +125,6 @@ public class jHFSApp extends Application {
 
     @Override
     public void stop() throws Exception {
-        Files.deleteIfExists(Paths.get(System.getProperty("user.dir"), "jHFS.log"));
         System.exit(0);
     }
 }

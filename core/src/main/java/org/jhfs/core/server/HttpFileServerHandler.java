@@ -2,19 +2,31 @@ package org.jhfs.core.server;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.*;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.stream.ChunkedFile;
 import io.netty.util.CharsetUtil;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
+import org.jhfs.core.model.Connection;
 import org.jhfs.core.model.VirtualFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.activation.MimetypesFileTypeMap;
 import java.io.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -43,9 +55,14 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private static final Pattern INSECURE_URI = Pattern.compile(".*[<>&\"].*");
     private static final Pattern ALLOWED_FILE_NAME = Pattern.compile("[A-Za-z0-9][ -_A-Za-z0-9\\.]*");
     private static ArrayList<VirtualFile> virtualFiles;
+    private static TableView<Connection> connections;
+    private static TextArea logs;
+    private final Logger logger = LoggerFactory.getLogger(HttpFileServerHandler.class);
 
-    HttpFileServerHandler(ArrayList<VirtualFile> virtualFiles) {
+    HttpFileServerHandler(ArrayList<VirtualFile> virtualFiles, TextArea logs, TableView<Connection> connections) {
         HttpFileServerHandler.virtualFiles = virtualFiles;
+        HttpFileServerHandler.logs = logs;
+        HttpFileServerHandler.connections = connections;
     }
 
     private static String sanitizeUri(String uri) {
@@ -260,35 +277,23 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         ChannelFuture sendFileFuture;
         ChannelFuture lastContentFuture;
 
-//        sendFileFuture = ctx.write(new DefaultFileRegion(raf.getChannel(), 0, fileLength), ctx.newProgressivePromise());
-//        // Write the end marker.
-//        lastContentFuture = ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
-
         sendFileFuture = ctx.writeAndFlush(new HttpChunkedInput(new ChunkedFile(raf, 0, fileLength, 8192)),
                 ctx.newProgressivePromise());
-        // HttpChunkedInput will write the end marker (LastHttpContent) for us.
+
         lastContentFuture = sendFileFuture;
 
-        sendFileFuture.addListener(new ChannelProgressiveFutureListener() {
-            @Override
-            public void operationProgressed(ChannelProgressiveFuture future, long progress, long total) {
-                if (total < 0) { // total unknown
-                    System.err.println(future.channel() + " Transfer progress: " + progress);
-                } else {
-                    System.err.println(future.channel() + " Transfer progress: " + progress + " / " + total);
-                }
-            }
+        final InetSocketAddress socketAddress = (InetSocketAddress) ctx.channel().remoteAddress();
+        final InetAddress inetaddress = socketAddress.getAddress();
+        final String hostAddress = inetaddress.getHostAddress();
+        final int port = socketAddress.getPort();
 
-            @Override
-            public void operationComplete(ChannelProgressiveFuture future) {
-                System.err.println(future.channel() + " Transfer complete.");
-            }
-        });
+        sendFileFuture.addListener(new ConnectionChannelProgressiveFutureListener(hostAddress, port, request, connections, logs));
 
         // Decide whether to close the connection or not.
         if (!HttpUtil.isKeepAlive(request)) {
             // Close the connection when the whole content is written out.
             lastContentFuture.addListener(ChannelFutureListener.CLOSE);
+            //todo buscar y elminar la connecion fantasma de la tabla.
         }
     }
 
@@ -322,6 +327,8 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             return;
         }
 
+        logConnection(ctx, request);
+
         switch (request.uri()) {
             case "/":
                 sendListing(ctx, null);
@@ -333,9 +340,29 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         }
     }
 
+    private void logConnection(ChannelHandlerContext ctx, FullHttpRequest request) {
+        final InetSocketAddress socketAddress = (InetSocketAddress) ctx.channel().remoteAddress();
+        final InetAddress inetaddress = socketAddress.getAddress();
+        final String hostAddress = inetaddress.getHostAddress();
+        final int port = socketAddress.getPort();
+
+        String uri = request.uri();
+        try {
+            uri = URLDecoder.decode(uri, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+        }
+
+        final String log = String.format("%s %s:%d Requested %s %s%n",
+                LocalTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME),
+                hostAddress, port, request.method(), uri);
+
+        logs.appendText(log);
+    }
+
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        cause.printStackTrace();
+        logger.info("Communication breakdown", cause);
+
         if (ctx.channel().isActive()) {
             sendError(ctx, INTERNAL_SERVER_ERROR);
         }

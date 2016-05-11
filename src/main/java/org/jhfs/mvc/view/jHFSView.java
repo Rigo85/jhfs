@@ -11,8 +11,8 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.StringConverter;
+import org.jhfs.core.model.Connection;
 import org.jhfs.core.model.VirtualFile;
-import org.jhfs.mvc.model.Connection;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -128,24 +128,24 @@ public class jHFSView extends BorderPane {
 
         TableColumn<Connection, String> fileCol = new TableColumn<>("File");
         fileCol.setCellValueFactory(new PropertyValueFactory<>("file"));
-        fileCol.setPrefWidth(150);
+        fileCol.setPrefWidth(350);
         fileCol.setGraphic(new ImageView(getClass().getClassLoader().getResource("images/file.png").toExternalForm()));
 
         TableColumn<Connection, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(new PropertyValueFactory<>("status"));
-        statusCol.setPrefWidth(150);
+        statusCol.setPrefWidth(250);
 
-        TableColumn<Connection, String> speedCol = new TableColumn<>("Speed");
-        speedCol.setCellValueFactory(new PropertyValueFactory<>("speed"));
-        speedCol.setPrefWidth(150);
+//        TableColumn<Connection, String> speedCol = new TableColumn<>("Speed");
+//        speedCol.setCellValueFactory(new PropertyValueFactory<>("speed"));
+//        speedCol.setPrefWidth(150);
 
-        TableColumn<Connection, ProgressBar> progressBarCol = new TableColumn<>("Progress");
-        speedCol.setCellValueFactory(new PropertyValueFactory<>("progressBar"));
-        speedCol.setPrefWidth(150);
+        TableColumn<Connection, String> progressBarCol = new TableColumn<>("Progress");
+        progressBarCol.setCellValueFactory(new PropertyValueFactory<>("progressBar"));
+        progressBarCol.setPrefWidth(150);
 
         connections = new TableView<>();
         connections.setPlaceholder(new Label());
-        connections.getColumns().addAll(ipAddressCol, fileCol, statusCol, speedCol, progressBarCol);
+        connections.getColumns().addAll(ipAddressCol, fileCol, statusCol, /*speedCol,*/ progressBarCol);
 
         return connections;
     }
@@ -174,6 +174,7 @@ public class jHFSView extends BorderPane {
 
         logs = new TextArea();
         logs.setEditable(false);
+        logs.setWrapText(true);
 
         logPane.setContent(logs);
 
