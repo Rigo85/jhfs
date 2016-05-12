@@ -58,7 +58,7 @@ public class jHFSPresenter {
 
         attachEvents();
 
-        this.httpFileServer = new HttpFileServer(configuration, hfsView.urlCombo.getValue(), hfsView.logs,
+        this.httpFileServer = new HttpFileServer(configuration, hfsView.urlCombo, hfsView.logs,
                 hfsView.connections);
 
         task = new Service<Void>() {
@@ -134,9 +134,13 @@ public class jHFSPresenter {
             e.consume();
         });
 
-        hfsView.portBtn.setOnAction(event -> {
-            changePort();
+        hfsView.portBtn.setOnAction(event -> changePort());
+
+        hfsView.urlCombo.setOnKeyPressed(event -> {
+            System.out.println(event.getCode());
         });
+
+        hfsView.urlCombo.setOnHidden(event -> task.restart());
 
         hfsView.about.setOnAction(event -> {
             Alert alert = new Alert(Alert.AlertType.INFORMATION, "", ButtonType.OK);
