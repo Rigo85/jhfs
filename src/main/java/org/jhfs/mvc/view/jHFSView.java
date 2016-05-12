@@ -47,11 +47,13 @@ public class jHFSView extends BorderPane {
     ContextMenu menu;
     MenuItem about;
     MenuItem exit;
+    String uri;
 
     public jHFSView() {
         centerPane = new SplitPane(createTopPane(), createConnectionTable());
         centerPane.setOrientation(Orientation.VERTICAL);
         centerPane.setDividerPosition(0, 0.7);
+        this.uri = "";
         setCenter(centerPane);
         setTop(createToolbar());
     }
@@ -80,7 +82,7 @@ public class jHFSView extends BorderPane {
         urlCombo.setConverter(new StringConverter<InetAddress>() {
             @Override
             public String toString(InetAddress object) {
-                return String.format("http://%s/", object.getHostAddress());
+                return String.format("http://%s/%s", object.getHostAddress(), uri);
             }
 
             @Override

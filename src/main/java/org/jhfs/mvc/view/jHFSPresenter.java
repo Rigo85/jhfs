@@ -8,10 +8,7 @@ import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.input.DataFormat;
-import javafx.scene.input.Dragboard;
-import javafx.scene.input.MouseButton;
-import javafx.scene.input.TransferMode;
+import javafx.scene.input.*;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
@@ -77,28 +74,32 @@ public class jHFSPresenter {
         task.start();
 
         task.exceptionProperty().addListener((observable, oldValue, e) -> {
-            if (e != null) {
-                String sb = e.getMessage() +
-                        "\n\n" +
-                        "Please check firewall configuration," +
-                        "\n" +
-                        String.format("or the port %d is being used by another service", configuration.getPort()) +
-                        ".\n" +
-                        "On GNU/Linux systems to run services that listen on ports 1-1024 you need to run them as root user." +
-                        "\n\n" +
-                        "Do you want to change the port?";
-                Alert alert = new Alert(Alert.AlertType.ERROR, sb, ButtonType.YES, ButtonType.NO);
-                alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
-                final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
-                window.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
-                final Optional<ButtonType> buttonType = alert.showAndWait();
-                if (buttonType.isPresent() && buttonType.get() == ButtonType.YES) {
-                    changePort();
-                } else {
-                    System.exit(0);
-                }
-            }
+            portProblem(e);
         });
+    }
+
+    private void portProblem(Throwable e) {
+        if (e != null) {
+            String sb = e.getMessage() +
+                    "\n\n" +
+                    "Please check firewall configuration," +
+                    "\n" +
+                    String.format("or the port %d is being used by another service", configuration.getPort()) +
+                    ".\n" +
+                    "On GNU/Linux systems to run services that listen on ports 1-1024 you need to run them as root user." +
+                    "\n\n" +
+                    "Do you want to change the port?";
+            Alert alert = new Alert(Alert.AlertType.ERROR, sb, ButtonType.YES, ButtonType.NO);
+            alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+            final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
+            window.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
+            final Optional<ButtonType> buttonType = alert.showAndWait();
+            if (buttonType.isPresent() && buttonType.get() == ButtonType.YES) {
+                changePort();
+            } else {
+                System.exit(0);
+            }
+        }
     }
 
     private void attachEvents() {
@@ -111,6 +112,8 @@ public class jHFSPresenter {
         });
 
         hfsView.portBtn.setText(String.format(portFormat, configuration.getPort()));
+
+        hfsView.fileSystem.setOnMouseClicked(event -> updatingUrl());
 
         hfsView.fileSystem.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
@@ -136,34 +139,23 @@ public class jHFSPresenter {
 
         hfsView.portBtn.setOnAction(event -> changePort());
 
-        hfsView.urlCombo.setOnKeyPressed(event -> {
-            System.out.println(event.getCode());
-        });
-
         hfsView.urlCombo.setOnHidden(event -> task.restart());
 
-        hfsView.about.setOnAction(event -> {
-            Alert alert = new Alert(Alert.AlertType.INFORMATION, "", ButtonType.OK);
-            Stage stage = (Stage) alert.getDialogPane().getScene().getWindow();
-            alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
-            stage.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
-            alert.setHeaderText("HTTP File Server v0.1");
-            alert.setContentText("Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>" +
-                    "\n\n" +
-                    "Copyright 2016 by Rigoberto Leander Salgado Reyes." +
-                    "\n\n" +
-                    "This program is licensed to you under the terms of version 3 of the" +
-                    "GNU Affero General Public License. This program is distributed WITHOUT" +
-                    "ANY EXPRESS OR IMPLIED WARRANTY, INCLUDING THOSE OF NON-INFRINGEMENT," +
-                    "MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Please refer to the" +
-                    "AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.");
-            alert.setTitle("About Dialog");
-            alert.showAndWait();
-        });
+        hfsView.about.setOnAction(event -> about());
 
         hfsView.exit.setOnAction(event -> {
             exitApp();
             Platform.exit();
+        });
+
+        hfsView.copyToClipBoardBtn.setOnAction(event -> {
+            final String hostAddress = hfsView.urlCombo.getValue().getHostAddress();
+            final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+            final Clipboard clipboard = Clipboard.getSystemClipboard();
+            final ClipboardContent content = new ClipboardContent();
+            content.putString(String.format("http://%s/%s", hostAddress, selectedItem != null ?
+                    selectedItem.getValue().getName() : ""));
+            clipboard.setContent(content);
         });
 
         createFileSystemMenu();
@@ -171,6 +163,36 @@ public class jHFSPresenter {
         createUrlCombo();
 
         selectInterface();
+    }
+
+    private void updatingUrl() {
+        final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+        if (selectedItem != null) {
+            final int selectedIndex = hfsView.urlCombo.getSelectionModel().getSelectedIndex();
+            hfsView.urlCombo.getSelectionModel().clearSelection();
+            hfsView.uri = selectedItem.getValue().getName();
+            hfsView.urlCombo.setItems(hfsView.urlCombo.getItems());
+            hfsView.urlCombo.getSelectionModel().select(selectedIndex);
+        }
+    }
+
+    private void about() {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, "", ButtonType.OK);
+        Stage stage = (Stage) alert.getDialogPane().getScene().getWindow();
+        alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+        stage.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
+        alert.setHeaderText("HTTP File Server v0.1");
+        alert.setContentText("Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>" +
+                "\n\n" +
+                "Copyright 2016 by Rigoberto Leander Salgado Reyes." +
+                "\n\n" +
+                "This program is licensed to you under the terms of version 3 of the" +
+                "GNU Affero General Public License. This program is distributed WITHOUT" +
+                "ANY EXPRESS OR IMPLIED WARRANTY, INCLUDING THOSE OF NON-INFRINGEMENT," +
+                "MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Please refer to the" +
+                "AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.");
+        alert.setTitle("About Dialog");
+        alert.showAndWait();
     }
 
     private void changePort() {
