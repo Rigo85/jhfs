@@ -23,7 +23,7 @@ public class Configuration {
     private ArrayList<VirtualFile> fileSystem;
 
     public Configuration() {
-        this.port = 8080;
+        this.port = 80;
         this.fileSystem = new ArrayList<>();
     }
 

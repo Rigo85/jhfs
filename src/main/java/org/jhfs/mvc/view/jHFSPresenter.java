@@ -1,6 +1,8 @@
 package org.jhfs.mvc.view;
 
+import javafx.application.Platform;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
@@ -47,6 +49,7 @@ public class jHFSPresenter {
     private jHFSView hfsView;
     private String portFormat;
     private Configuration configuration;
+    private Service<Void> task;
 
     public jHFSPresenter(jHFSView hfsView) {
         this.hfsView = hfsView;
@@ -58,32 +61,44 @@ public class jHFSPresenter {
         this.httpFileServer = new HttpFileServer(configuration, hfsView.urlCombo.getValue(), hfsView.logs,
                 hfsView.connections);
 
-        final Task<Object> task = new Task<Object>() {
+        task = new Service<Void>() {
             @Override
-            protected Object call() throws Exception {
-                httpFileServer.start();
-                return null;
+            protected Task<Void> createTask() {
+                return new Task<Void>() {
+                    @Override
+                    protected Void call() throws Exception {
+                        httpFileServer.start();
+                        return null;
+                    }
+                };
             }
         };
 
-        //todo be able to change the port at this time.
-        task.exceptionProperty().addListener((observable, oldValue, e) -> {
-            String sb = e.getMessage() +
-                    "\n\n" +
-                    "Please check firewall configuration," +
-                    "\n" +
-                    String.format("or the port %d is being used by another service", configuration.getPort()) +
-                    ".\n" +
-                    "On GNU/Linux systems to run services that listen on ports 1-1024 you need to run them as root user";
-            Alert alert = new Alert(Alert.AlertType.ERROR, sb, ButtonType.CLOSE);
-            alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
-            final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
-            window.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
-            alert.showAndWait();
-            System.exit(0);
-        });
+        task.start();
 
-        new Thread(task).start();
+        task.exceptionProperty().addListener((observable, oldValue, e) -> {
+            if (e != null) {
+                String sb = e.getMessage() +
+                        "\n\n" +
+                        "Please check firewall configuration," +
+                        "\n" +
+                        String.format("or the port %d is being used by another service", configuration.getPort()) +
+                        ".\n" +
+                        "On GNU/Linux systems to run services that listen on ports 1-1024 you need to run them as root user." +
+                        "\n\n" +
+                        "Do you want to change the port?";
+                Alert alert = new Alert(Alert.AlertType.ERROR, sb, ButtonType.YES, ButtonType.NO);
+                alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+                final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
+                window.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
+                final Optional<ButtonType> buttonType = alert.showAndWait();
+                if (buttonType.isPresent() && buttonType.get() == ButtonType.YES) {
+                    changePort();
+                } else {
+                    System.exit(0);
+                }
+            }
+        });
     }
 
     private void attachEvents() {
@@ -120,16 +135,31 @@ public class jHFSPresenter {
         });
 
         hfsView.portBtn.setOnAction(event -> {
-            TextInputDialog inputDialog = new TextInputDialog(String.valueOf(configuration.getPort()));
-            inputDialog.setHeaderText("New port");
-            inputDialog.setTitle("Changing port");
-            final Stage window = (Stage) inputDialog.getDialogPane().getScene().getWindow();
-            window.getIcons().add(new Image(getClass().getClassLoader()
-                    .getResource("images/icon.png").toExternalForm()));
-            configuration.setPort(Integer.parseInt(inputDialog.showAndWait()
-                    .orElse(String.valueOf(configuration.getPort()))));
+            changePort();
+        });
 
-            hfsView.portBtn.setText(String.format(portFormat, configuration.getPort()));
+        hfsView.about.setOnAction(event -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION, "", ButtonType.OK);
+            Stage stage = (Stage) alert.getDialogPane().getScene().getWindow();
+            alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+            stage.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
+            alert.setHeaderText("HTTP File Server v0.1");
+            alert.setContentText("Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>" +
+                    "\n\n" +
+                    "Copyright 2016 by Rigoberto Leander Salgado Reyes." +
+                    "\n\n" +
+                    "This program is licensed to you under the terms of version 3 of the" +
+                    "GNU Affero General Public License. This program is distributed WITHOUT" +
+                    "ANY EXPRESS OR IMPLIED WARRANTY, INCLUDING THOSE OF NON-INFRINGEMENT," +
+                    "MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. Please refer to the" +
+                    "AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.");
+            alert.setTitle("About Dialog");
+            alert.showAndWait();
+        });
+
+        hfsView.exit.setOnAction(event -> {
+            exitApp();
+            Platform.exit();
         });
 
         createFileSystemMenu();
@@ -137,6 +167,34 @@ public class jHFSPresenter {
         createUrlCombo();
 
         selectInterface();
+    }
+
+    private void changePort() {
+        TextInputDialog inputDialog = new TextInputDialog(String.valueOf(configuration.getPort()));
+        inputDialog.setHeaderText("New port");
+        inputDialog.setTitle("Changing port");
+        final Stage window = (Stage) inputDialog.getDialogPane().getScene().getWindow();
+        window.getIcons().add(new Image(getClass().getClassLoader()
+                .getResource("images/icon.png").toExternalForm()));
+        int portBefore = configuration.getPort();
+        configuration.setPort(Integer.parseInt(inputDialog.showAndWait()
+                .orElse(String.valueOf(configuration.getPort()))));
+
+        hfsView.portBtn.setText(String.format(portFormat, configuration.getPort()));
+
+        if (configuration.getPort() != portBefore) {
+            task.restart();
+        }
+    }
+
+    public void exitApp() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "Do you want to save the current virtual file system?", ButtonType.YES, ButtonType.NO);
+        Stage stage1 = (Stage) alert.getDialogPane().getScene().getWindow();
+        stage1.getIcons().add(new Image(
+                getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
+        alert.setTitle("Confirmation Dialog");
+        alert.showAndWait().filter(b -> b == ButtonType.YES).ifPresent(e -> saveConfiguration());
     }
 
     private void selectInterface() {

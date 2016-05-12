@@ -12,12 +12,11 @@ package org.jhfs.core.model;
  * AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.
  */
 public class Connection {
-    String ipAddress;
-    String file;
-    String progressBar;
-    long progress;
-    long total;
-    long slice;
+    private String ipAddress;
+    private String file;
+    private String progressBar;
+    private long progress;
+    private long total;
 
     public Connection(String ipAddress, String file, long total) {
         this.ipAddress = ipAddress;
@@ -38,8 +37,8 @@ public class Connection {
     public void setProgress(long progress, long total) {
         this.progress = progress;
         this.total = total;
-        this.slice = total / 10L;
-        StringBuffer sb = new StringBuffer();
+        long slice = total / 10L;
+        StringBuilder sb = new StringBuilder();
         for (int i = 1; i <= 10; i++) {
             if (i <= progress / slice) {
                 sb.append('■');
@@ -48,8 +47,6 @@ public class Connection {
             }
         }
         progressBar = sb.toString();
-//        progressBar = LongStream.range(0, progress / slice).boxed().map(l -> "■").collect(Collectors.joining());
-//        progressBar += LongStream.range(0, 10L - progress / slice).boxed().map(l -> "□").collect(Collectors.joining());
     }
 
     public String getStatus() {

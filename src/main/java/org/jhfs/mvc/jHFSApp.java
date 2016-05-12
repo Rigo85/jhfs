@@ -2,8 +2,6 @@ package org.jhfs.mvc;
 
 import javafx.application.Application;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 import org.jhfs.mvc.view.jHFSPresenter;
@@ -34,7 +32,7 @@ public class jHFSApp extends Application {
     @Override
     public void start(Stage stage) {
         jHFSView hfsView = new jHFSView();
-        final jHFSPresenter jHFSPresenter = new jHFSPresenter(hfsView);
+        final jHFSPresenter presenter = new jHFSPresenter(hfsView);
 
         Scene scene = new Scene(hfsView, 1000, 400);
         stage.setScene(scene);
@@ -108,15 +106,7 @@ public class jHFSApp extends Application {
 //            }
 //        });
 
-        stage.setOnCloseRequest(event -> {
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
-                    "Do you want to save the current virtual file system?", ButtonType.YES, ButtonType.NO);
-            Stage stage1 = (Stage) alert.getDialogPane().getScene().getWindow();
-            stage1.getIcons().add(new Image(
-                    getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
-            alert.setTitle("Confirmation Dialog");
-            alert.showAndWait().filter(b -> b == ButtonType.YES).ifPresent(e -> jHFSPresenter.saveConfiguration());
-        });
+        stage.setOnCloseRequest(event -> presenter.exitApp());
 
         stage.getIcons().add(new Image(getClass().getClassLoader().getResource("images/icon.png").toExternalForm()));
 
