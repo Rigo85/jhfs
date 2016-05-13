@@ -46,6 +46,7 @@ import java.util.Optional;
 public class jHFSPresenter {
     private final HttpFileServer httpFileServer;
     private final Application application;
+    private final ContextMenu fileSystemMenu;
     private jHFSView hfsView;
     private String portFormat;
     private Configuration configuration;
@@ -81,6 +82,7 @@ public class jHFSPresenter {
         });
 
         this.application = application;
+        fileSystemMenu = new ContextMenu();
     }
 
     private void portProblem(Throwable e) {
@@ -118,7 +120,7 @@ public class jHFSPresenter {
 
         hfsView.portBtn.setText(String.format(portFormat, configuration.getPort()));
 
-        hfsView.fileSystem.setOnMouseClicked(event -> updatingUrl());
+        hfsView.fileSystem.setOnMouseClicked(this::fileSystemOnMouseClicked);
 
         hfsView.fileSystem.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
@@ -127,20 +129,7 @@ public class jHFSPresenter {
             e.consume();
         });
 
-        hfsView.fileSystem.setOnDragDropped(e -> {
-            Dragboard dragboard = e.getDragboard();
-            for (DataFormat dataFormat : dragboard.getContentTypes()) {
-                final Object content = dragboard.getContent(dataFormat);
-                if (content != null &&
-                        content instanceof ArrayList &&
-                        !((ArrayList) content).isEmpty() &&
-                        ((ArrayList) content).get(0) instanceof File) {
-
-                    ((ArrayList<File>) content).stream().forEach(this::createTreeItem);
-                }
-            }
-            e.consume();
-        });
+        hfsView.fileSystem.setOnDragDropped(this::fileSystemOnDragDrop);
 
         hfsView.portBtn.setOnAction(event -> changePort());
 
@@ -163,11 +152,47 @@ public class jHFSPresenter {
                     selectedItem != null ? selectedItem.getValue().getName() : ""));
         });
 
-        createFileSystemMenu();
-
         createUrlCombo();
 
         selectInterface();
+    }
+
+    private void fileSystemOnMouseClicked(MouseEvent event) {
+        if (event.getButton() == MouseButton.PRIMARY) {
+            fileSystemMenu.hide();
+        } else if (event.getButton() == MouseButton.SECONDARY) {
+            final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+            if (selectedItem != null) {
+                fileSystemMenu.getItems().clear();
+                fileSystemMenu.getItems().addAll(createRemoveMenuItem(), createPropertiesMenuItem());
+                if (Paths.get(selectedItem.getValue().getBasePath(), selectedItem.getValue().getName()).toFile().isDirectory()) {
+                    String text = "Turn in upload directory";
+                    if (configuration.getUploadFolder() != null &&
+                            selectedItem.getValue().equals(configuration.getUploadFolder())) {
+                        text = "Disable upload directory";
+                    }
+                    fileSystemMenu.getItems().add(0, createUploadMenuItem(text));
+                }
+
+                fileSystemMenu.show(hfsView.fileSystem, event.getScreenX(), event.getScreenY());
+            }
+        }
+        updatingUrl();
+    }
+
+    private void fileSystemOnDragDrop(DragEvent e) {
+        Dragboard dragboard = e.getDragboard();
+        for (DataFormat dataFormat : dragboard.getContentTypes()) {
+            final Object content = dragboard.getContent(dataFormat);
+            if (content != null &&
+                    content instanceof ArrayList &&
+                    !((ArrayList) content).isEmpty() &&
+                    ((ArrayList) content).get(0) instanceof File) {
+
+                ((ArrayList<File>) content).stream().forEach(this::createTreeItem);
+            }
+        }
+        e.consume();
     }
 
     private void copyToClipBoard() {
@@ -286,10 +311,8 @@ public class jHFSPresenter {
             final VirtualFile virtualFile = new VirtualFile(file.getName(), file.getParent());
 
             final TreeItem<VirtualFile> virtualFileTreeItem = new TreeItem<VirtualFile>(virtualFile,
-                    new ImageView(getClass().getClassLoader()
-                            .getResource(file.isDirectory() ?
-                                    "images/folder.png" : "images/archive.png")
-                            .toExternalForm())) {
+                    new ImageView(getClass().getClassLoader().getResource(file.isDirectory() ?
+                            "images/folder.png" : "images/archive.png").toExternalForm())) {
                 @Override
                 public boolean equals(Object obj) {
                     if (this == obj) return true;
@@ -302,10 +325,7 @@ public class jHFSPresenter {
             };
 
             if (!hfsView.fileSystem.getRoot().getChildren().contains(virtualFileTreeItem)) {
-                hfsView.fileSystem
-                        .getRoot()
-                        .getChildren()
-                        .add(virtualFileTreeItem);
+                hfsView.fileSystem.getRoot().getChildren().add(virtualFileTreeItem);
             }
 
             configuration.addVirtualFile(virtualFile);
@@ -340,6 +360,17 @@ public class jHFSPresenter {
                 createTreeItem(file);
             }
         });
+
+        if (configuration.getUploadFolder() != null) {
+            for (TreeItem<VirtualFile> treeItem : hfsView.fileSystem.getRoot().getChildren()) {
+                if (treeItem.getValue().equals(configuration.getUploadFolder())) {
+                    treeItem.setGraphic(new ImageView(getClass().getClassLoader()
+                            .getResource("images/upload-folder.png").toExternalForm()));
+//                    hfsView.upload.setText("Disable upload directory");
+                    break;
+                }
+            }
+        }
     }
 
     private void createUrlCombo() {
@@ -363,57 +394,111 @@ public class jHFSPresenter {
         }
     }
 
-    private void createFileSystemMenu() {
+    private MenuItem createRemoveMenuItem() {
         MenuItem remove = new MenuItem("Remove", new ImageView(getClass().getClassLoader()
                 .getResource("images/remove.png").toExternalForm()));
+        remove.setOnAction(event -> fileSystemRemove());
 
-        remove.setOnAction(event -> {
-            final ObservableList<TreeItem<VirtualFile>> selectedItems =
-                    hfsView.fileSystem.getSelectionModel().getSelectedItems();
-            if (selectedItems != null) {
-                selectedItems
-                        .filtered(item -> !item.getValue().getName().equals("/"))
-                        .stream().forEach(virtualFileTreeItem -> {
-                    hfsView.fileSystem.getRoot().getChildren().remove(virtualFileTreeItem);
-                    configuration.removeVirtualFile(virtualFileTreeItem.getValue());
-                });
-            }
-        });
-
-        MenuItem properties = new MenuItem("Properties", new ImageView(getClass().getClassLoader()
-                .getResource("images/properties.png").toExternalForm()));
-
-        properties.setOnAction(event -> {
-            final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
-            if (selectedItem != null && !selectedItem.getValue().getName().equals("/")) {
-                GridPane gridPane = new GridPane();
-                gridPane.setHgap(10);
-                gridPane.setVgap(10);
-                gridPane.setPadding(new Insets(8, 8, 8, 8));
-
-                final File file = new File(selectedItem.getValue().getBasePath());
-                ImageView imageView = new ImageView(getClass().getClassLoader().getResource(file.isDirectory() ?
-                        "images/folder48x48.png" : "images/archive48x48.png").toExternalForm());
-                imageView.setPreserveRatio(true);
-                gridPane.addRow(0, imageView, new Label(selectedItem.getValue().getName()));
-                gridPane.addRow(1, new Label("Type:"), new Label(file.exists() && file.isDirectory() ? "Directory" : "File"));
-                gridPane.addRow(2, new Label("Path:"), new Label(selectedItem.getValue().getBasePath()));
-
-                Alert alert = new Alert(Alert.AlertType.NONE);
-                final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
-                window.getIcons().add(new Image(getClass().getClassLoader()
-                        .getResource("images/icon.png").toExternalForm()));
-                alert.getButtonTypes().add(ButtonType.CLOSE);
-                alert.getDialogPane().setContent(gridPane);
-
-                alert.showAndWait();
-            }
-        });
-
-        hfsView.fileSystem.setContextMenu(new ContextMenu(remove, properties));
+        return remove;
     }
 
-    public void saveConfiguration() {
+    private MenuItem createPropertiesMenuItem() {
+        MenuItem properties = new MenuItem("Properties", new ImageView(getClass().getClassLoader()
+                .getResource("images/properties.png").toExternalForm()));
+        properties.setOnAction(event -> fileSystemProperties());
+
+        return properties;
+    }
+
+    private MenuItem createUploadMenuItem(String text) {
+        MenuItem upload = new MenuItem(text, new ImageView(getClass().getClassLoader()
+                .getResource("images/upload-folder.png").toExternalForm()));
+        upload.setOnAction(event -> fileSystemUpload());
+
+        return upload;
+    }
+
+    private void fileSystemUpload() {
+        final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+        if (configuration.getUploadFolder() == null) {
+            selectedItem.setGraphic(new ImageView(getClass().getClassLoader()
+                    .getResource("images/upload-folder.png").toExternalForm()));
+            configuration.setUploadFolder(selectedItem.getValue());
+        } else {
+            if (selectedItem.getValue().equals(configuration.getUploadFolder())) {
+                selectedItem.setGraphic(new ImageView(getClass().getClassLoader()
+                        .getResource("images/folder.png").toExternalForm()));
+                configuration.setUploadFolder(null);
+            } else {
+                for (TreeItem<VirtualFile> treeItem : hfsView.fileSystem.getRoot().getChildren()) {
+                    if (treeItem.getValue().equals(configuration.getUploadFolder())) {
+                        treeItem.setGraphic(new ImageView(getClass().getClassLoader()
+                                .getResource("images/folder.png").toExternalForm()));
+                        break;
+                    }
+                }
+                selectedItem.setGraphic(new ImageView(getClass().getClassLoader()
+                        .getResource("images/upload-folder.png").toExternalForm()));
+                configuration.setUploadFolder(selectedItem.getValue());
+            }
+        }
+    }
+
+    private void fileSystemRemove() {
+        final ObservableList<TreeItem<VirtualFile>> selectedItems =
+                hfsView.fileSystem.getSelectionModel().getSelectedItems();
+        if (selectedItems != null) {
+            selectedItems
+                    .filtered(item -> !item.getValue().getName().equals("/"))
+                    .stream().forEach(virtualFileTreeItem -> {
+                hfsView.fileSystem.getRoot().getChildren().remove(virtualFileTreeItem);
+                configuration.removeVirtualFile(virtualFileTreeItem.getValue());
+            });
+        }
+    }
+
+    private void fileSystemProperties() {
+        final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+        if (selectedItem != null && !selectedItem.getValue().getName().equals("/")) {
+            GridPane gridPane = new GridPane();
+            gridPane.setHgap(10);
+            gridPane.setVgap(10);
+            gridPane.setPadding(new Insets(8, 8, 8, 8));
+
+            final File file = Paths.get(selectedItem.getValue().getBasePath(), selectedItem.getValue().getName()).toFile();
+
+            String textLabel;
+            String img;
+            if (configuration.getUploadFolder() != null &&
+                    configuration.getUploadFolder().equals(selectedItem.getValue())) {
+                textLabel = "Upload directory";
+                img = "images/upload-folder48x48.png";
+            } else if (file.isDirectory()) {
+                textLabel = "Directory";
+                img = "images/folder48x48.png";
+            } else {
+                textLabel = "File";
+                img = "images/archive48x48.png";
+            }
+
+            ImageView imageView = new ImageView(getClass().getClassLoader().getResource(img).toExternalForm());
+            imageView.setPreserveRatio(true);
+            gridPane.addRow(0, imageView, new Label(selectedItem.getValue().getName()));
+            gridPane.addRow(1, new Label("Type:"), new Label(textLabel));
+            gridPane.addRow(2, new Label("Path:"), new Label(selectedItem.getValue().getBasePath()));
+
+            Alert alert = new Alert(Alert.AlertType.NONE);
+            final Stage window = (Stage) alert.getDialogPane().getScene().getWindow();
+            window.getIcons().add(new Image(getClass().getClassLoader()
+                    .getResource("images/icon.png").toExternalForm()));
+            alert.getButtonTypes().add(ButtonType.CLOSE);
+            alert.getDialogPane().setContent(gridPane);
+
+            alert.showAndWait();
+        }
+    }
+
+    private void saveConfiguration() {
         ConfigurationUtil.saveConfiguration(configuration);
     }
 }

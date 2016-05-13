@@ -45,6 +45,7 @@ public class jHFSView extends BorderPane {
     SplitPane centerPane;
     SplitPane topPanel;
     ContextMenu menu;
+//    MenuItem upload;
     MenuItem about;
     MenuItem exit;
     String uri;
@@ -62,13 +63,16 @@ public class jHFSView extends BorderPane {
         menuBtn = new Button("Menu", new ImageView(getClass().getClassLoader()
                 .getResource("images/menu.png").toExternalForm()));
 
+//        upload = new MenuItem("Upload folder", new ImageView(getClass().getClassLoader()
+//                .getResource("images/upload-folder.png").toExternalForm()));
+
         about = new MenuItem("About", new ImageView(getClass().getClassLoader()
                 .getResource("images/about.png").toExternalForm()));
 
         exit = new MenuItem("Exit", new ImageView(getClass().getClassLoader()
                 .getResource("images/exit.png").toExternalForm()));
 
-        menu = new ContextMenu(about, new SeparatorMenuItem(), exit);
+        menu = new ContextMenu(/*upload, */about, new SeparatorMenuItem(), exit);
 
         portBtn = new Button("Port: 80", new ImageView(getClass().getClassLoader()
                 .getResource("images/port.png").toExternalForm()));
@@ -108,7 +112,7 @@ public class jHFSView extends BorderPane {
                     address = InetAddress.getLoopbackAddress();
                 }
 
-                return  address;
+                return address;
             }
         });
         urlCombo.setMaxWidth(Double.MAX_VALUE);
