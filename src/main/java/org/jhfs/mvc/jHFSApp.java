@@ -32,7 +32,7 @@ public class jHFSApp extends Application {
     @Override
     public void start(Stage stage) {
         jHFSView hfsView = new jHFSView();
-        final jHFSPresenter presenter = new jHFSPresenter(hfsView);
+        final jHFSPresenter presenter = new jHFSPresenter(hfsView, this);
 
         Scene scene = new Scene(hfsView, 1000, 400);
         stage.setScene(scene);

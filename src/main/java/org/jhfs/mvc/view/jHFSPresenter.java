@@ -1,5 +1,7 @@
 package org.jhfs.mvc.view;
 
+import com.sun.javafx.application.HostServicesDelegate;
+import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Service;
@@ -43,12 +45,13 @@ import java.util.Optional;
  */
 public class jHFSPresenter {
     private final HttpFileServer httpFileServer;
+    private final Application application;
     private jHFSView hfsView;
     private String portFormat;
     private Configuration configuration;
     private Service<Void> task;
 
-    public jHFSPresenter(jHFSView hfsView) {
+    public jHFSPresenter(jHFSView hfsView, Application application) {
         this.hfsView = hfsView;
         this.portFormat = "Port: %d";
         this.configuration = ConfigurationUtil.loadConfiguration();
@@ -76,6 +79,8 @@ public class jHFSPresenter {
         task.exceptionProperty().addListener((observable, oldValue, e) -> {
             portProblem(e);
         });
+
+        this.application = application;
     }
 
     private void portProblem(Throwable e) {
@@ -148,14 +153,14 @@ public class jHFSPresenter {
             Platform.exit();
         });
 
-        hfsView.copyToClipBoardBtn.setOnAction(event -> {
+        hfsView.copyToClipBoardBtn.setOnAction(event -> copyToClipBoard());
+
+        hfsView.openInBrowserBtn.setOnAction(event -> {
             final String hostAddress = hfsView.urlCombo.getValue().getHostAddress();
             final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
-            final Clipboard clipboard = Clipboard.getSystemClipboard();
-            final ClipboardContent content = new ClipboardContent();
-            content.putString(String.format("http://%s/%s", hostAddress, selectedItem != null ?
-                    selectedItem.getValue().getName() : ""));
-            clipboard.setContent(content);
+            HostServicesDelegate hostServices = HostServicesDelegate.getInstance(application);
+            hostServices.showDocument(String.format("http://%s:%d/%s", hostAddress, configuration.getPort(),
+                    selectedItem != null ? selectedItem.getValue().getName() : ""));
         });
 
         createFileSystemMenu();
@@ -163,6 +168,16 @@ public class jHFSPresenter {
         createUrlCombo();
 
         selectInterface();
+    }
+
+    private void copyToClipBoard() {
+        final String hostAddress = hfsView.urlCombo.getValue().getHostAddress();
+        final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+        final Clipboard clipboard = Clipboard.getSystemClipboard();
+        final ClipboardContent content = new ClipboardContent();
+        content.putString(String.format("http://%s:%d/%s", hostAddress, configuration.getPort(), selectedItem != null ?
+                selectedItem.getValue().getName() : ""));
+        clipboard.setContent(content);
     }
 
     private void updatingUrl() {
