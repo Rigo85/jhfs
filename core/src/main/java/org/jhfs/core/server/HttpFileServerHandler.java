@@ -148,10 +148,16 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     }
 
     private static void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
-        //todo make html error page.
-        FullHttpResponse response = new DefaultFullHttpResponse(
-                HTTP_1_1, status, Unpooled.copiedBuffer("Failure: " + status + "\r\n", CharsetUtil.UTF_8));
-        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8");
+        final InetSocketAddress socketAddress = (InetSocketAddress) ctx.channel().localAddress();
+        final InetAddress inetaddress = socketAddress.getAddress();
+        final String hostAddress = inetaddress.getHostAddress();
+        final int port = socketAddress.getPort();
+
+        String content = String.format("<div>%s <a href=\"http://%s:%d\">go Home</a></div>",
+                "Failure: " + status + "</br>", hostAddress, port);
+        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, status,
+                Unpooled.copiedBuffer(content, CharsetUtil.UTF_8));
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
 
         // Close the connection as soon as the error message is sent.
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
@@ -367,23 +373,26 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private void scanFiles(String hostAddress, int port, String uri, List<String> uris) {
         try {
             uri = URLDecoder.decode(uri, "UTF-8");
-            final String vRoot = Paths.get(uri).getName(0).toString();
-            for (VirtualFile vFile : configuration.getFileSystem()) {
-                if (vFile.getName().equals(vRoot)) {
-                    final File file = Paths.get(vFile.getBasePath(), uri).toFile();
-                    if (file.isFile()) {
-                        final String url = String.format("http://%s:%d%s", hostAddress, port, uri);//URLEncoder.encode(uri, "UTF-8")
-                        uris.add(url);
-                        logger.info("Adding " + url + " to download list");
-                    } else {
-                        for (File f : file.listFiles()) {
+        } catch (Exception e) {
+            logger.error("Problem decoding URI " + uri, e);
+        }
+        final String vRoot = Paths.get(uri).getName(0).toString();
+        for (VirtualFile vFile : configuration.getFileSystem()) {
+            if (vFile.getName().equals(vRoot)) {
+                final File file = Paths.get(vFile.getBasePath(), uri).toFile();
+                if (file.isFile()) {
+                    final String url = String.format("http://%s:%d%s", hostAddress, port, uri);
+                    uris.add(url);
+                    logger.info("Adding " + url + " to download list");
+                } else {
+                    final File[] files = file.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
                             scanFiles(hostAddress, port, Paths.get(uri, f.getName()).toString(), uris);
                         }
                     }
                 }
             }
-        } catch (UnsupportedEncodingException e) {
-            logger.error("Problems scanning file(s)", e);
         }
     }
 
@@ -415,16 +424,16 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                     .map(uri -> {
                         try {
                             uri = URLDecoder.decode(uri, "UTF-8");
-                            final String vRoot = Paths.get(uri).getName(0).toString();
-                            for (VirtualFile vFile : configuration.getFileSystem()) {
-                                if (vFile.getName().equals(vRoot)) {
-                                    return Paths.get(vFile.getBasePath(), uri).toFile();
-                                }
-                            }
-                            return null;
-                        } catch (UnsupportedEncodingException e) {
-                            return null;
+                        } catch (Exception e) {
+                            logger.error("Problem decoding URI " + uri, e);
                         }
+                        final String vRoot = Paths.get(uri).getName(0).toString();
+                        for (VirtualFile vFile : configuration.getFileSystem()) {
+                            if (vFile.getName().equals(vRoot)) {
+                                return Paths.get(vFile.getBasePath(), uri).toFile();
+                            }
+                        }
+                        return null;
                     })
                     .filter(path -> path != null)
                     .collect(Collectors.toList());
