@@ -42,8 +42,6 @@ public class jHFSView extends BorderPane {
     TableView<Connection> connections;
     TreeView<VirtualFile> fileSystem;
     TextArea logs;
-    SplitPane centerPane;
-    SplitPane topPanel;
     ContextMenu menu;
 //    MenuItem upload;
     MenuItem about;
@@ -51,7 +49,7 @@ public class jHFSView extends BorderPane {
     String uri;
 
     public jHFSView() {
-        centerPane = new SplitPane(createTopPane(), createConnectionTable());
+        SplitPane centerPane = new SplitPane(createTopPane(), createConnectionTable());
         centerPane.setOrientation(Orientation.VERTICAL);
         centerPane.setDividerPosition(0, 0.7);
         this.uri = "";
@@ -184,7 +182,7 @@ public class jHFSView extends BorderPane {
 
         logPane.setContent(logs);
 
-        topPanel = new SplitPane(virtualFileSystemPane, logPane);
+        SplitPane topPanel = new SplitPane(virtualFileSystemPane, logPane);
         topPanel.setDividerPosition(0, 0.3);
 
         return topPanel;

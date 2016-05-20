@@ -457,8 +457,11 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             bis.close();
         } else if (file.isDirectory()) {
             taos.closeArchiveEntry();
-            for (File childFile : file.listFiles()) {
-                addFilesToCompression(taos, childFile, file.getName());
+            final File[] files = file.listFiles();
+            if (files != null) {
+                for (File childFile : files) {
+                    addFilesToCompression(taos, childFile, file.getName());
+                }
             }
         }
     }

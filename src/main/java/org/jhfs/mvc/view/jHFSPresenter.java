@@ -46,10 +46,10 @@ public class jHFSPresenter {
     private final HttpFileServer httpFileServer;
     private final Application application;
     private final ContextMenu fileSystemMenu;
-    private jHFSView hfsView;
-    private String portFormat;
+    private final jHFSView hfsView;
+    private final String portFormat;
+    private final Service<Void> task;
     private Configuration configuration;
-    private Service<Void> task;
 
     public jHFSPresenter(jHFSView hfsView, Application application) {
         this.hfsView = hfsView;

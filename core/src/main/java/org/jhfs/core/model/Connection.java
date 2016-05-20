@@ -12,8 +12,8 @@ package org.jhfs.core.model;
  * AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.
  */
 public class Connection {
-    private String ipAddress;
-    private String file;
+    private final String ipAddress;
+    private final String file;
     private String progressBar;
     private long progress;
     private long total;

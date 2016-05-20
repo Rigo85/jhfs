@@ -10,9 +10,6 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import org.jhfs.core.model.Configuration;
 import org.jhfs.core.model.Connection;
-import org.jhfs.core.model.VirtualFile;
-
-import java.util.ArrayList;
 
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
@@ -27,13 +24,11 @@ import java.util.ArrayList;
  */
 class HttpFileServerInitializer extends ChannelInitializer<SocketChannel> {
 
-    final private ArrayList<VirtualFile> virtualFiles;
     final private TextArea logs;
     final private TableView<Connection> connections;
     private final Configuration configuration;
 
     HttpFileServerInitializer(Configuration configuration, TextArea logs, TableView<Connection> connections) {
-        this.virtualFiles = configuration.getFileSystem();
         this.logs = logs;
         this.connections = connections;
         this.configuration = configuration;
