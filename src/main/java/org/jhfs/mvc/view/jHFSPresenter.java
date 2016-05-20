@@ -3,7 +3,6 @@ package org.jhfs.mvc.view;
 import com.sun.javafx.application.HostServicesDelegate;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.collections.ObservableList;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
@@ -144,17 +143,21 @@ public class jHFSPresenter {
 
         hfsView.copyToClipBoardBtn.setOnAction(event -> copyToClipBoard());
 
-        hfsView.openInBrowserBtn.setOnAction(event -> {
-            final String hostAddress = hfsView.urlCombo.getValue().getHostAddress();
-            final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
-            HostServicesDelegate hostServices = HostServicesDelegate.getInstance(application);
-            hostServices.showDocument(String.format("http://%s:%d/%s", hostAddress, configuration.getPort(),
-                    selectedItem != null ? selectedItem.getValue().getName() : ""));
-        });
+        hfsView.openInBrowserBtn.setOnAction(event -> openInBrowser());
 
         createUrlCombo();
 
         selectInterface();
+    }
+
+    private void openInBrowser() {
+        final String hostAddress = hfsView.urlCombo.getValue().getHostAddress();
+        final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
+        if (selectedItem != null) {
+            HostServicesDelegate hostServices = HostServicesDelegate.getInstance(application);
+            hostServices.showDocument(String.format("http://%s:%d/%s", hostAddress, configuration.getPort(),
+                    selectedItem.getValue().equals(VirtualFile.root) ? "" : selectedItem.getValue().getName()));
+        }
     }
 
     private void fileSystemOnMouseClicked(MouseEvent event) {
@@ -162,7 +165,7 @@ public class jHFSPresenter {
             fileSystemMenu.hide();
         } else if (event.getButton() == MouseButton.SECONDARY) {
             final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
-            if (selectedItem != null) {
+            if (selectedItem != null && !selectedItem.getValue().equals(VirtualFile.root)) {
                 fileSystemMenu.getItems().clear();
                 fileSystemMenu.getItems().addAll(createRemoveMenuItem(), createPropertiesMenuItem());
                 if (Paths.get(selectedItem.getValue().getBasePath(), selectedItem.getValue().getName()).toFile().isDirectory()) {
@@ -198,11 +201,13 @@ public class jHFSPresenter {
     private void copyToClipBoard() {
         final String hostAddress = hfsView.urlCombo.getValue().getHostAddress();
         final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
-        final Clipboard clipboard = Clipboard.getSystemClipboard();
-        final ClipboardContent content = new ClipboardContent();
-        content.putString(String.format("http://%s:%d/%s", hostAddress, configuration.getPort(), selectedItem != null ?
-                selectedItem.getValue().getName() : ""));
-        clipboard.setContent(content);
+        if (selectedItem != null) {
+            final Clipboard clipboard = Clipboard.getSystemClipboard();
+            final ClipboardContent content = new ClipboardContent();
+            content.putString(String.format("http://%s:%d/%s", hostAddress, configuration.getPort(),
+                    selectedItem.getValue().equals(VirtualFile.root) ? "" : selectedItem.getValue().getName()));
+            clipboard.setContent(content);
+        }
     }
 
     private void updatingUrl() {
@@ -210,7 +215,7 @@ public class jHFSPresenter {
         if (selectedItem != null) {
             final int selectedIndex = hfsView.urlCombo.getSelectionModel().getSelectedIndex();
             hfsView.urlCombo.getSelectionModel().clearSelection();
-            hfsView.uri = selectedItem.getValue().getName();
+            hfsView.uri = selectedItem.getValue().equals(VirtualFile.root) ? "" : selectedItem.getValue().getName();
             hfsView.urlCombo.setItems(hfsView.urlCombo.getItems());
             hfsView.urlCombo.getSelectionModel().select(selectedIndex);
         }
@@ -445,15 +450,16 @@ public class jHFSPresenter {
     }
 
     private void fileSystemRemove() {
-        final ObservableList<TreeItem<VirtualFile>> selectedItems =
-                hfsView.fileSystem.getSelectionModel().getSelectedItems();
-        if (selectedItems != null) {
-            selectedItems
-                    .filtered(item -> !item.getValue().getName().equals("/"))
-                    .stream().forEach(virtualFileTreeItem -> {
-                hfsView.fileSystem.getRoot().getChildren().remove(virtualFileTreeItem);
-                configuration.removeVirtualFile(virtualFileTreeItem.getValue());
+
+        final ArrayList<TreeItem<VirtualFile>> selectedItems =
+                new ArrayList<>(hfsView.fileSystem.getSelectionModel().getSelectedItems());
+
+        if (!selectedItems.isEmpty()) {
+            selectedItems.stream().filter(item -> !item.getValue().equals(VirtualFile.root)).forEach(item -> {
+                configuration.removeVirtualFile(item.getValue());
+                hfsView.fileSystem.getRoot().getChildren().remove(item);
             });
+            updatingUrl();
         }
     }
 

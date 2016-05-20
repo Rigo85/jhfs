@@ -35,6 +35,7 @@ project(':core') {
         compile 'org.slf4j:slf4j-api:1.7.21'
         compile 'ch.qos.logback:logback-classic:1.1.5'
         compile 'ch.qos.logback:logback-core:1.1.5'
+        compile 'org.apache.commons:commons-compress:1.10'
     }
 }
 

@@ -50,7 +50,7 @@ public final class HttpFileServer {
                     .channel(NioServerSocketChannel.class)
                     .localAddress(new InetSocketAddress(addressComboBox.getValue(), configuration.getPort()))
                     .handler(new LoggingHandler(LogLevel.INFO))
-                    .childHandler(new HttpFileServerInitializer(configuration.getFileSystem(), logs, connections));
+                    .childHandler(new HttpFileServerInitializer(configuration, logs, connections));
 
             Channel ch = b.bind().sync().channel();
 

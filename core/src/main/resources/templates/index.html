@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>HTTP File Server</title>
+    <style>
+        tbody td {
+            text-align: right;
+        }
+
+        .filenameCls {
+            text-align: left;
+        }
+
+        thead th {
+            text-align: center;
+            font-weight: bold;
+            background-color: #1e22af;
+            color: white;
+        }
+
+        th, td {
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #f5f5f5
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2
+        }
+
+        .actions, .elements {
+            float: left;
+            margin: 10px;
+        }
+
+        fieldset {
+            margin-bottom: 5px;
+            border-radius: 5px;
+            padding: 5px;
+            min-height:50px;
+            display: block;
+            text-align: center;
+            align-items: center;
+        }
+
+        .informationCls {
+            text-align: center;
+            align-items: center;
+            display: block;
+        }
+
+        .copy-left {
+            display: inline-block;
+            text-align: right;
+            margin: 0px;
+            -moz-transform: scaleX(-1);
+            -o-transform: scaleX(-1);
+            -webkit-transform: scaleX(-1);
+            transform: scaleX(-1);
+            filter: FlipH;
+            -ms-filter: "FlipH";
+        }
+
+    </style>
+</head>
+
+<body>
+<div class="actions" style="margin-top: 0">
+    <section style="max-width:250px;">
+        <fieldset>
+            <legend>Directory</legend>
+            <a href="$HOME$">Home</a>
+            <a href="..">Up</a>
+        </fieldset>
+
+        <fieldset>
+            <legend>Actions</legend>
+            <button id="archivebtn">Archive</button>
+            <button id="getlistbtn">Get list</button>
+        </fieldset>
+
+        $UPLOAD$
+
+        <fieldset>
+            <legend>Information</legend>
+            <label class="informationCls">
+                <a href="https://github.com/Rigo85/jhfs">HTTP File Server</a>
+            </label>
+            <label class="informationCls">
+                <span class="copy-left">&copy;</span> $YEAR$</br>
+            </label>
+            <label class="informationCls">
+                Rigoberto L. Salgado Reyes
+            </label>
+        </fieldset>
+    </section>
+</div>
+
+<div class="elements">
+    <table id="tbl" class="table">
+        <thead>
+        <tr>
+            <th><input type="checkbox" id="chckHead"/></th>
+            <th>Filename</th>
+            <th>Size</th>
+            <th>Timestamp</th>
+        </tr>
+        </thead>
+        <tbody>
+        $BODY$
+        </tbody>
+    </table>
+</div>
+
+<script type="text/javascript">
+    document.querySelector('#chckHead').addEventListener("click", () => {
+        var elems = document.querySelectorAll('.chcktbl');
+        var value = document.getElementById("chckHead").checked;
+        Array.prototype.forEach.call(elems, obj => obj.checked = value);
+    });
+
+    var getSelectedElements = () => {
+            var elements = document.querySelectorAll('.chcktbl');
+            var allFiles = Array.from(document.querySelectorAll('.filenameCls'));
+            return Array.prototype.reduce.call(elements, (previousValue, currentValue, currentIndex, array) => {
+                        if(currentValue.checked){
+                            previousValue.push(window.location.pathname + allFiles[currentIndex].firstChild.getAttribute('href'));
+                        }
+                        return previousValue;
+            }, []);
+    };
+
+    var createAndSubmitForm = (key, ext, value) => {
+        var f = document.createElement("form");
+        f.setAttribute('method',"GET");
+        var date = new Date();
+        var name = date.getDate().toString() + date.getMonth().toString() + date.getFullYear().toString() +
+        date.getHours().toString() + date.getMinutes().toString() + date.getSeconds().toString();
+        f.setAttribute('action', window.location.origin + '/' + name + ext);
+
+        var i = document.createElement("input");
+        i.setAttribute('type', "hidden");
+        i.setAttribute('name', key);
+        i.setAttribute('value', value);
+
+        f.appendChild(i);
+        document.getElementsByTagName('body')[0].appendChild(f);
+        f.submit();
+    };
+
+    document.querySelector('#archivebtn').addEventListener("click", () => {
+        var selectedFiles = getSelectedElements();
+        if (selectedFiles.length && confirm("Do you want to download a compress archive with the selected elements?")) {
+            createAndSubmitForm("archive", '.tar.gz', selectedFiles);
+        }
+    });
+
+    document.querySelector('#getlistbtn').addEventListener("click", () => {
+        var selectedFiles = getSelectedElements();
+        if (selectedFiles.length && confirm("Do you want to get a download list with the selected elements?")){
+            createAndSubmitForm("getlist", '.txt', selectedFiles);
+        }
+    });
+</script>
+</body>
+</html>
+

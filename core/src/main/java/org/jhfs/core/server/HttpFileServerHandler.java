@@ -6,11 +6,16 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.stream.ChunkedFile;
 import io.netty.util.CharsetUtil;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import org.apache.commons.compress.utils.IOUtils;
+import org.jhfs.core.model.Configuration;
 import org.jhfs.core.model.Connection;
 import org.jhfs.core.model.VirtualFile;
 import org.slf4j.Logger;
@@ -21,15 +26,18 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.zip.GZIPOutputStream;
 
 import static io.netty.handler.codec.http.HttpMethod.GET;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
@@ -52,17 +60,15 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private static final String HTTP_DATE_FORMAT = "EEE, dd MMM yyyy HH:mm:ss zzz";
     private static final String HTTP_DATE_GMT_TIMEZONE = "GMT";
     private static final int HTTP_CACHE_SECONDS = 60;
-    private static final Pattern INSECURE_URI = Pattern.compile(".*[<>&\"].*");
-    private static final Pattern ALLOWED_FILE_NAME = Pattern.compile("[A-Za-z0-9][ -_A-Za-z0-9\\.]*");
-    private static ArrayList<VirtualFile> virtualFiles;
     private static TableView<Connection> connections;
     private static TextArea logs;
+    private static Configuration configuration;
     private final Logger logger = LoggerFactory.getLogger(HttpFileServerHandler.class);
 
-    HttpFileServerHandler(ArrayList<VirtualFile> virtualFiles, TextArea logs, TableView<Connection> connections) {
-        HttpFileServerHandler.virtualFiles = virtualFiles;
+    HttpFileServerHandler(Configuration configuration, TextArea logs, TableView<Connection> connections) {
         HttpFileServerHandler.logs = logs;
         HttpFileServerHandler.connections = connections;
+        HttpFileServerHandler.configuration = configuration;
     }
 
     private static String sanitizeUri(String uri) {
@@ -78,16 +84,14 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
         uri = uri.replace('/', File.separatorChar);
 
-        if (uri.contains(File.separator + '.') ||
-                uri.contains('.' + File.separator) ||
-                uri.charAt(0) == '.' || uri.charAt(uri.length() - 1) == '.' ||
-                INSECURE_URI.matcher(uri).matches()) {
+        if (uri.contains(File.separator + '.') || uri.contains('.' + File.separator) || uri.charAt(0) == '.' ||
+                uri.charAt(uri.length() - 1) == '.') {
             return null;
         }
 
         final Path path = Paths.get(uri);
         VirtualFile file = null;
-        for (VirtualFile vf : virtualFiles) {
+        for (VirtualFile vf : configuration.getFileSystem()) {
             if (vf.getName().equals(path.getName(0).toString())) {
                 file = vf;
                 break;
@@ -101,42 +105,33 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
 
-        String dirPath;
         Stream<File> files;
 
         if (dir != null) {
-            dirPath = dir.getPath();
             final File[] filesList = dir.listFiles();
             files = filesList == null ? Stream.empty() : Arrays.stream(filesList);
         } else {
-            dirPath = "Home";
-            files = virtualFiles.stream().map(vFile -> Paths.get(vFile.getBasePath(), vFile.getName()).toFile());
+            files = configuration.getFileSystem().stream().map(vFile -> Paths.get(vFile.getBasePath(), vFile.getName()).toFile());
         }
 
-        StringBuilder buf = new StringBuilder()
-                .append("<!DOCTYPE html>\r\n")
-                .append("<html><head><title>")
-                .append("Listing of: ")
-                .append(dirPath)
-                .append("</title></head><body>\r\n")
+        final String stringTemplate = new BufferedReader(new InputStreamReader(
+                ClassLoader.getSystemResourceAsStream("templates/index.html"))).lines().
+                collect(Collectors.joining(System.getProperty("line.separator")));
 
-                .append("<h3>Listing of: ")
-                .append(dirPath)
-                .append("</h3>\r\n")
+        final SocketChannel channel = (SocketChannel) ctx.channel();
+        final String hostAddress = channel.localAddress().getAddress().getHostAddress();
+        final int port = channel.localAddress().getPort();
 
-                .append("<ul>")
-                .append("<li><a href=\"../\">..</a></li>\r\n");
+        final String page = stringTemplate
+                .replace("$HOME$", String.format("http://%s:%d/", hostAddress, port))
+                .replace("$UPLOAD$", configuration.getUploadFolder() == null ? "" : addUploadFieldSet(ctx))
+                .replace("$YEAR$", String.valueOf(LocalDate.now().getYear()))
+                .replace("$BODY$",
+                        files.filter(file -> file.exists() && !file.isHidden() && file.canRead())
+                                .map(HttpFileServerHandler::addRowToTable)
+                                .collect(Collectors.joining(System.getProperty("line.separator"))));
 
-        files.filter(file -> file.exists() && !file.isHidden() && file.canRead() &&
-                ALLOWED_FILE_NAME.matcher(file.getName()).matches())
-                .forEach(file -> buf.append("<li><a href=\"")
-                        .append(file.getName())
-                        .append("\">")
-                        .append(file.getName())
-                        .append("</a></li>\r\n"));
-
-        buf.append("</ul></body></html>\r\n");
-        ByteBuf buffer = Unpooled.copiedBuffer(buf, CharsetUtil.UTF_8);
+        ByteBuf buffer = Unpooled.copiedBuffer(page, CharsetUtil.UTF_8);
         response.content().writeBytes(buffer);
         buffer.release();
 
@@ -253,6 +248,10 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         // Cache Validation
         if (cacheValidation(ctx, request, file)) return;
 
+        sendFile(ctx, request, file);
+    }
+
+    private static void sendFile(ChannelHandlerContext ctx, FullHttpRequest request, File file) throws ParseException, IOException {
         RandomAccessFile raf;
         try {
             raf = new RandomAccessFile(file, "r");
@@ -264,7 +263,12 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
         HttpResponse response = new DefaultHttpResponse(HTTP_1_1, OK);
         HttpUtil.setContentLength(response, fileLength);
-        setContentTypeHeader(response, file);
+        if (file.getName().endsWith(".tar.gz")) {
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/x-gzip");
+        } else {
+            setContentTypeHeader(response, file);
+        }
+
         setDateAndCacheHeaders(response, file);
         if (HttpUtil.isKeepAlive(request)) {
             response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
@@ -293,7 +297,6 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         if (!HttpUtil.isKeepAlive(request)) {
             // Close the connection when the whole content is written out.
             lastContentFuture.addListener(ChannelFutureListener.CLOSE);
-            //todo buscar y elminar la connecion fantasma de la tabla.
         }
     }
 
@@ -315,6 +318,26 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         return false;
     }
 
+    private static String addRowToTable(File file) {
+        return "<tr>\n" +
+                "<td><input type=\"checkbox\" class=\"chcktbl\"/></td>\n" +
+                String.format("<td class=\"filenameCls\"><a href=\"%s\">%s</a></td>\n", file.getName(), file.getName()) +
+                String.format("<td>%s</td>\n", file.isDirectory() ? "<i>Directory</i>" : Utils.humanReadableByteCount(file.length(), true)) +
+                String.format("<td>%s</td>\n", new SimpleDateFormat(HTTP_DATE_FORMAT, Locale.US)
+                        .format(file.lastModified()));
+    }
+
+    private static String addUploadFieldSet(ChannelHandlerContext ctx) {
+        final SocketChannel channel = (SocketChannel) ctx.channel();
+        final String hostAddress = channel.localAddress().getAddress().getHostAddress();
+        final int port = channel.localAddress().getPort();
+
+        return String.format("<fieldset>\n" +
+                "<legend>Upload</legend>\n" +
+                "<a href=\"http://%s:%d/upload\">Send files</a>\n" +
+                "</fieldset>", hostAddress, port);
+    }
+
     @Override
     public void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) throws Exception {
         if (!request.decoderResult().isSuccess()) {
@@ -329,15 +352,119 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
         logConnection(ctx, request);
 
-        switch (request.uri()) {
-            case "/":
-                sendListing(ctx, null);
-                break;
-
-            default:
-                processRequest(ctx, request);
-                break;
+        QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
+        if (request.uri().equals("/")) {
+            sendListing(ctx, null);
+        } else if (decoder.parameters().containsKey("archive")) {
+            sendCompressFile(ctx, request, Arrays.asList(decoder.parameters().get("archive").get(0).split(",")));
+        } else if (decoder.parameters().containsKey("getlist")) {
+            sendDownloadList(ctx, request, Arrays.asList(decoder.parameters().get("getlist").get(0).split(",")));
+        } else {
+            processRequest(ctx, request);
         }
+    }
+
+    private void scanFiles(String hostAddress, int port, String uri, List<String> uris) {
+        try {
+            uri = URLDecoder.decode(uri, "UTF-8");
+            final String vRoot = Paths.get(uri).getName(0).toString();
+            for (VirtualFile vFile : configuration.getFileSystem()) {
+                if (vFile.getName().equals(vRoot)) {
+                    final File file = Paths.get(vFile.getBasePath(), uri).toFile();
+                    if (file.isFile()) {
+                        final String url = String.format("http://%s:%d%s", hostAddress, port, uri);//URLEncoder.encode(uri, "UTF-8")
+                        uris.add(url);
+                        logger.info("Adding " + url + " to download list");
+                    } else {
+                        for (File f : file.listFiles()) {
+                            scanFiles(hostAddress, port, Paths.get(uri, f.getName()).toString(), uris);
+                        }
+                    }
+                }
+            }
+        } catch (UnsupportedEncodingException e) {
+            logger.error("Problems scanning file(s)", e);
+        }
+    }
+
+    private void sendDownloadList(ChannelHandlerContext ctx, FullHttpRequest request, List<String> uris) {
+        try {
+            final InetSocketAddress socketAddress = (InetSocketAddress) ctx.channel().localAddress();
+            final InetAddress inetaddress = socketAddress.getAddress();
+            final String hostAddress = inetaddress.getHostAddress();
+            final int port = socketAddress.getPort();
+            ArrayList<String> downloadList = new ArrayList<>();
+
+            for (String uri : uris) {
+                scanFiles(hostAddress, port, uri, downloadList);
+            }
+
+            final Path tempPath = Files.createTempFile("downloadlist", ".txt");
+            final File tempFile = tempPath.toFile();
+            Files.write(tempPath, downloadList);
+            sendFile(ctx, request, tempFile);
+        } catch (IOException | ParseException e) {
+            logger.error("Problems compressing file(s)", e);
+            sendError(ctx, INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void sendCompressFile(ChannelHandlerContext ctx, FullHttpRequest request, List<String> uris) {
+        try {
+            final List<File> files = uris.stream()
+                    .map(uri -> {
+                        try {
+                            uri = URLDecoder.decode(uri, "UTF-8");
+                            final String vRoot = Paths.get(uri).getName(0).toString();
+                            for (VirtualFile vFile : configuration.getFileSystem()) {
+                                if (vFile.getName().equals(vRoot)) {
+                                    return Paths.get(vFile.getBasePath(), uri).toFile();
+                                }
+                            }
+                            return null;
+                        } catch (UnsupportedEncodingException e) {
+                            return null;
+                        }
+                    })
+                    .filter(path -> path != null)
+                    .collect(Collectors.toList());
+
+            final File tempFile = File.createTempFile("archive", ".tar.gz");
+            compressFiles(files, tempFile);
+            sendFile(ctx, request, tempFile);
+        } catch (IOException | ParseException e) {
+            logger.error("Problems compressing file(s)", e);
+            sendError(ctx, INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void addFilesToCompression(TarArchiveOutputStream taos, File file, String dir) throws IOException {
+        taos.putArchiveEntry(new TarArchiveEntry(file, dir + File.separator + file.getName()));
+        if (file.isFile()) {
+            logger.debug("Compressing " + file.getAbsolutePath());
+            BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file));
+            IOUtils.copy(bis, taos);
+            taos.closeArchiveEntry();
+            bis.close();
+        } else if (file.isDirectory()) {
+            taos.closeArchiveEntry();
+            for (File childFile : file.listFiles()) {
+                addFilesToCompression(taos, childFile, file.getName());
+            }
+        }
+    }
+
+    private void compressFiles(Collection<File> files, File output) throws IOException {
+        logger.debug("Compressing " + files.size() + " to " + output.getAbsoluteFile());
+        FileOutputStream fos = new FileOutputStream(output);
+        TarArchiveOutputStream taos = new TarArchiveOutputStream(new GZIPOutputStream(new BufferedOutputStream(fos)));
+        taos.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_STAR);
+        taos.setLongFileMode(TarArchiveOutputStream.LONGFILE_GNU);
+        for (File f : files) {
+            addFilesToCompression(taos, f, ".");
+        }
+        taos.close();
+        fos.close();
     }
 
     private void logConnection(ChannelHandlerContext ctx, FullHttpRequest request) {
@@ -361,8 +488,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        logger.info("Communication breakdown", cause);
-
+        logger.error("Communication breakdown", cause);
         if (ctx.channel().isActive()) {
             sendError(ctx, INTERNAL_SERVER_ERROR);
         }

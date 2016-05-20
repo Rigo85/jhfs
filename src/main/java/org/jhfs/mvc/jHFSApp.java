@@ -7,8 +7,6 @@ import javafx.stage.Stage;
 import org.jhfs.mvc.view.jHFSPresenter;
 import org.jhfs.mvc.view.jHFSView;
 
-import java.awt.*;
-
 /**
  * Author Rigoberto Leander Salgado Reyes <rlsalgado2006@gmail.com>
  * <p>
@@ -22,9 +20,6 @@ import java.awt.*;
  */
 public class jHFSApp extends Application {
 
-    SystemTray systemTray = null;
-    TrayIcon trayIcon = null;
-
     public static void main(String[] args) {
         launch(args);
     }
@@ -37,74 +32,6 @@ public class jHFSApp extends Application {
         Scene scene = new Scene(hfsView, 1000, 400);
         stage.setScene(scene);
         stage.setTitle("jHFS");
-
-//        stage.iconifiedProperty().addListener((observable, oldValue, newValue) -> {
-//            if (newValue && SystemTray.isSupported()) {
-//                systemTray = SystemTray.getSystemTray();
-//
-//                URL resource = getClass().getClassLoader().getResource("images/icon.png");
-//                java.awt.Image image = java.awt.Toolkit.getDefaultToolkit().getImage(resource);
-//
-//                ActionListener exitListener = e -> {
-//                    System.out.println("Exiting...");
-//                    System.exit(0);
-//                };
-//
-//                ActionListener restoreListener = e -> {
-//                    System.out.println("Restoring");
-//                    systemTray.remove(trayIcon);
-//                    stage.show();
-//                };
-//
-//                PopupMenu popup = new PopupMenu();
-//                MenuItem defaultItem1 = new MenuItem("Restaurar");
-//                MenuItem defaultItem = new MenuItem("Salir");
-//                defaultItem.addActionListener(exitListener);
-//                defaultItem1.addActionListener(restoreListener);
-//                popup.add(defaultItem);
-//                popup.add(defaultItem1);
-//                try {
-//                    if (trayIcon == null) {
-//                        trayIcon = new TrayIcon(image, "jHFS", popup);
-//                    }
-//                    trayIcon.setImageAutoSize(true);
-//                    trayIcon.addMouseListener(new MouseListener() {
-//                        @Override
-//                        public void mouseClicked(MouseEvent e) {
-//                            if(e.getButton() == MouseEvent.BUTTON1 && e.getClickCount()==2){
-//                                System.out.println("show!");
-//                            }
-//                        }
-//
-//                        @Override
-//                        public void mousePressed(MouseEvent e) {
-//
-//                        }
-//
-//                        @Override
-//                        public void mouseReleased(MouseEvent e) {
-//
-//                        }
-//
-//                        @Override
-//                        public void mouseEntered(MouseEvent e) {
-//
-//                        }
-//
-//                        @Override
-//                        public void mouseExited(MouseEvent e) {
-//
-//                        }
-//                    });
-//
-//                    systemTray.add(trayIcon);
-//                    stage.hide();
-//                    trayIcon.displayMessage("Information", "jHFS still running", TrayIcon.MessageType.INFO);
-//                } catch (AWTException e1) {
-//                    e1.printStackTrace();
-//                }
-//            }
-//        });
 
         stage.setOnCloseRequest(event -> presenter.exitApp());
 
