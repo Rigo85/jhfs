@@ -19,7 +19,7 @@ import org.jhfs.core.model.Configuration;
 import org.jhfs.core.model.ConfigurationUtil;
 import org.jhfs.core.model.VirtualFile;
 import org.jhfs.core.server.HttpFileServer;
-import sun.net.util.IPAddressUtil;
+import org.jhfs.core.server.IPAddressUtil;
 
 import java.io.File;
 import java.net.InetAddress;
@@ -170,8 +170,7 @@ public class jHFSPresenter {
                 fileSystemMenu.getItems().addAll(createRemoveMenuItem(), createPropertiesMenuItem());
                 if (Paths.get(selectedItem.getValue().getBasePath(), selectedItem.getValue().getName()).toFile().isDirectory()) {
                     String text = "Turn in upload directory";
-                    if (configuration.getUploadFolder() != null &&
-                            selectedItem.getValue().equals(configuration.getUploadFolder())) {
+                    if (selectedItem.getValue().isUpload()) {
                         text = "Disable upload directory";
                     }
                     fileSystemMenu.getItems().add(0, createUploadMenuItem(text));
@@ -306,6 +305,10 @@ public class jHFSPresenter {
     }
 
     private void createTreeItem(File file) {
+        createTreeItem(file, false);
+    }
+
+    private void createTreeItem(File file, boolean upload) {
         if (hfsView.fileSystem
                 .getRoot()
                 .getChildren()
@@ -313,11 +316,12 @@ public class jHFSPresenter {
                 .noneMatch(item -> item.getValue()
                         .getBasePath().equals(file.getAbsolutePath()))) {
 
-            final VirtualFile virtualFile = new VirtualFile(file.getName(), file.getParent());
+            final VirtualFile virtualFile = new VirtualFile(file.getName(), file.getParent(), upload);
 
             final TreeItem<VirtualFile> virtualFileTreeItem = new TreeItem<VirtualFile>(virtualFile,
                     new ImageView(getClass().getClassLoader().getResource(file.isDirectory() ?
-                            "images/folder.png" : "images/archive.png").toExternalForm())) {
+                            (upload ? "images/upload-folder.png" : "images/folder.png") : "images/archive.png")
+                            .toExternalForm())) {
                 @Override
                 public boolean equals(Object obj) {
                     if (this == obj) return true;
@@ -362,20 +366,9 @@ public class jHFSPresenter {
         fileSystem.stream().forEach(virtualFile -> {
             File file = Paths.get(virtualFile.getBasePath(), virtualFile.getName()).toFile();
             if (file.exists()) {
-                createTreeItem(file);
+                createTreeItem(file, virtualFile.isUpload());
             }
         });
-
-        if (configuration.getUploadFolder() != null) {
-            for (TreeItem<VirtualFile> treeItem : hfsView.fileSystem.getRoot().getChildren()) {
-                if (treeItem.getValue().equals(configuration.getUploadFolder())) {
-                    treeItem.setGraphic(new ImageView(getClass().getClassLoader()
-                            .getResource("images/upload-folder.png").toExternalForm()));
-//                    hfsView.upload.setText("Disable upload directory");
-                    break;
-                }
-            }
-        }
     }
 
     private void createUrlCombo() {
@@ -425,27 +418,14 @@ public class jHFSPresenter {
 
     private void fileSystemUpload() {
         final TreeItem<VirtualFile> selectedItem = hfsView.fileSystem.getSelectionModel().getSelectedItem();
-        if (configuration.getUploadFolder() == null) {
+
+        if (selectedItem != null) {
+            final boolean upload = selectedItem.getValue().isUpload();
             selectedItem.setGraphic(new ImageView(getClass().getClassLoader()
-                    .getResource("images/upload-folder.png").toExternalForm()));
-            configuration.setUploadFolder(selectedItem.getValue());
-        } else {
-            if (selectedItem.getValue().equals(configuration.getUploadFolder())) {
-                selectedItem.setGraphic(new ImageView(getClass().getClassLoader()
-                        .getResource("images/folder.png").toExternalForm()));
-                configuration.setUploadFolder(null);
-            } else {
-                for (TreeItem<VirtualFile> treeItem : hfsView.fileSystem.getRoot().getChildren()) {
-                    if (treeItem.getValue().equals(configuration.getUploadFolder())) {
-                        treeItem.setGraphic(new ImageView(getClass().getClassLoader()
-                                .getResource("images/folder.png").toExternalForm()));
-                        break;
-                    }
-                }
-                selectedItem.setGraphic(new ImageView(getClass().getClassLoader()
-                        .getResource("images/upload-folder.png").toExternalForm()));
-                configuration.setUploadFolder(selectedItem.getValue());
-            }
+                    .getResource(upload ? "images/folder.png" : "images/upload-folder.png").toExternalForm()));
+            selectedItem.getValue().setUpload(!upload);
+            final int i = configuration.getFileSystem().indexOf(selectedItem.getValue());
+            configuration.getFileSystem().get(i).setUpload(!upload);
         }
     }
 
@@ -475,17 +455,11 @@ public class jHFSPresenter {
 
             String textLabel;
             String img;
-            if (configuration.getUploadFolder() != null &&
-                    configuration.getUploadFolder().equals(selectedItem.getValue())) {
-                textLabel = "Upload directory";
-                img = "images/upload-folder48x48.png";
-            } else if (file.isDirectory()) {
-                textLabel = "Directory";
-                img = "images/folder48x48.png";
-            } else {
-                textLabel = "File";
-                img = "images/archive48x48.png";
-            }
+
+            final boolean upload = selectedItem.getValue().isUpload();
+
+            textLabel = file.isFile() ? "File" : (upload ? "Upload directory" : "Directory");
+            img = file.isFile() ? "images/archive48x48.png" : (upload ? "images/upload-folder48x48.png" : "images/folder48x48.png");
 
             ImageView imageView = new ImageView(getClass().getClassLoader().getResource(img).toExternalForm());
             imageView.setPreserveRatio(true);

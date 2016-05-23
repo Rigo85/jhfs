@@ -22,21 +22,9 @@ public class Configuration {
     @SerializedName("fileSystem")
     private ArrayList<VirtualFile> fileSystem;
 
-    @SerializedName("uploadFolder")
-    private VirtualFile uploadFolder;
-
     public Configuration() {
         this.port = 8080;
         this.fileSystem = new ArrayList<>();
-        this.uploadFolder = null;
-    }
-
-    public VirtualFile getUploadFolder() {
-        return uploadFolder;
-    }
-
-    public void setUploadFolder(VirtualFile uploadFolder) {
-        this.uploadFolder = uploadFolder;
     }
 
     public int getPort() {

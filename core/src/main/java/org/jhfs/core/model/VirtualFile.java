@@ -14,7 +14,7 @@ import com.google.gson.annotations.SerializedName;
  * AGPL (http:www.gnu.org/licenses/agpl-3.0.txt) for more details.
  */
 public class VirtualFile {
-    public final static VirtualFile root = new VirtualFile("/", "");
+    public final static VirtualFile root = new VirtualFile("/", "", false);
 
     @SerializedName("name")
     private String name;
@@ -22,12 +22,16 @@ public class VirtualFile {
     @SerializedName("basepath")
     private String basePath;
 
+    @SerializedName("upload")
+    private boolean upload;
+
     public VirtualFile() {
     }
 
-    public VirtualFile(String name, String basePath) {
+    public VirtualFile(String name, String basePath, boolean upload) {
         this.name = name;
         this.basePath = basePath;
+        this.upload = upload;
     }
 
     public String getName() {
@@ -36,6 +40,14 @@ public class VirtualFile {
 
     private void setName(String name) {
         this.name = name;
+    }
+
+    public boolean isUpload() {
+        return upload;
+    }
+
+    public void setUpload(boolean upload) {
+        this.upload = upload;
     }
 
     public String getBasePath() {

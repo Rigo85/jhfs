@@ -98,10 +98,10 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             }
         }
 
-        return file == null ? null : file.getBasePath() + File.separator + uri;
+        return file == null ? null : file.getBasePath() + uri;
     }
 
-    private static void sendListing(ChannelHandlerContext ctx, File dir) {
+    private static void sendListing(ChannelHandlerContext ctx, File dir, boolean upload) {
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, OK);
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
 
@@ -124,7 +124,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
         final String page = stringTemplate
                 .replace("$HOME$", String.format("http://%s:%d/", hostAddress, port))
-                .replace("$UPLOAD$", configuration.getUploadFolder() == null ? "" : addUploadFieldSet(ctx))
+                .replace("$UPLOAD$", upload ? addUploadFieldSet() : "")
                 .replace("$YEAR$", String.valueOf(LocalDate.now().getYear()))
                 .replace("$BODY$",
                         files.filter(file -> file.exists() && !file.isHidden() && file.canRead())
@@ -142,22 +142,6 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private static void sendRedirect(ChannelHandlerContext ctx, String newUri) {
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, FOUND);
         response.headers().set(HttpHeaderNames.LOCATION, newUri);
-
-        // Close the connection as soon as the error message is sent.
-        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
-    }
-
-    private static void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
-        final InetSocketAddress socketAddress = (InetSocketAddress) ctx.channel().localAddress();
-        final InetAddress inetaddress = socketAddress.getAddress();
-        final String hostAddress = inetaddress.getHostAddress();
-        final int port = socketAddress.getPort();
-
-        String content = String.format("<div>%s <a href=\"http://%s:%d\">go Home</a></div>",
-                "Failure: " + status + "</br>", hostAddress, port);
-        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, status,
-                Unpooled.copiedBuffer(content, CharsetUtil.UTF_8));
-        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
 
         // Close the connection as soon as the error message is sent.
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
@@ -227,19 +211,19 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         final String path = sanitizeUri(uri);
 
         if (path == null) {
-            sendError(ctx, FORBIDDEN);
+            Utils.sendError(ctx, FORBIDDEN);
             return;
         }
 
         File file = new File(path);
         if (file.isHidden() || !file.exists()) {
-            sendError(ctx, NOT_FOUND);
+            Utils.sendError(ctx, NOT_FOUND);
             return;
         }
 
         if (file.isDirectory()) {
             if (uri.endsWith("/")) {
-                sendListing(ctx, file);
+                sendListing(ctx, file, Utils.canUploadToURI(configuration, uri));
             } else {
                 sendRedirect(ctx, uri + '/');
             }
@@ -247,7 +231,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         }
 
         if (!file.isFile()) {
-            sendError(ctx, FORBIDDEN);
+            Utils.sendError(ctx, FORBIDDEN);
             return;
         }
 
@@ -262,7 +246,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         try {
             raf = new RandomAccessFile(file, "r");
         } catch (FileNotFoundException ignore) {
-            sendError(ctx, NOT_FOUND);
+            Utils.sendError(ctx, NOT_FOUND);
             return;
         }
         long fileLength = raf.length();
@@ -333,26 +317,32 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                         .format(file.lastModified()));
     }
 
-    private static String addUploadFieldSet(ChannelHandlerContext ctx) {
-        final SocketChannel channel = (SocketChannel) ctx.channel();
-        final String hostAddress = channel.localAddress().getAddress().getHostAddress();
-        final int port = channel.localAddress().getPort();
-
-        return String.format("<fieldset>\n" +
-                "<legend>Upload</legend>\n" +
-                "<a href=\"http://%s:%d/upload\">Send files</a>\n" +
-                "</fieldset>", hostAddress, port);
+    private static String addUploadFieldSet() {
+        return "<fieldset>" +
+                "<legend>Upload</legend>" +
+                "<form action=\"\" enctype=\"multipart/form-data\" method=\"post\">" +
+                "<div id=\"locations\">" +
+                "<input style=\"width: 200px\" type=\"file\" name=\"files1\" multiple/>\n" +
+                "</div>" +
+                "<p>" +
+                "<label> " +
+                "<input class=\"button\" type=\"button\" id=\"addLocation\" value=\"Add location\"/> " +
+                "</label>" +
+                "<input class=\"button\" type=\"submit\" name=\"send\" value=\"Send\"/>" +
+                "</p>" +
+                "</form>" +
+                "</fieldset>";
     }
 
     @Override
     public void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) throws Exception {
         if (!request.decoderResult().isSuccess()) {
-            sendError(ctx, BAD_REQUEST);
+            Utils.sendError(ctx, BAD_REQUEST);
             return;
         }
 
         if (request.method() != GET) {
-            sendError(ctx, METHOD_NOT_ALLOWED);
+            Utils.sendError(ctx, METHOD_NOT_ALLOWED);
             return;
         }
 
@@ -360,7 +350,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
 
         QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
         if (request.uri().equals("/")) {
-            sendListing(ctx, null);
+            sendListing(ctx, null, false);
         } else if (decoder.parameters().containsKey("archive")) {
             sendCompressFile(ctx, request, Arrays.asList(decoder.parameters().get("archive").get(0).split(",")));
         } else if (decoder.parameters().containsKey("getlist")) {
@@ -414,7 +404,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             sendFile(ctx, request, tempFile);
         } catch (IOException | ParseException e) {
             logger.error("Problems compressing file(s)", e);
-            sendError(ctx, INTERNAL_SERVER_ERROR);
+            Utils.sendError(ctx, INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -443,7 +433,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             sendFile(ctx, request, tempFile);
         } catch (IOException | ParseException e) {
             logger.error("Problems compressing file(s)", e);
-            sendError(ctx, INTERNAL_SERVER_ERROR);
+            Utils.sendError(ctx, INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -502,7 +492,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         logger.error("Communication breakdown", cause);
         if (ctx.channel().isActive()) {
-            sendError(ctx, INTERNAL_SERVER_ERROR);
+            Utils.sendError(ctx, INTERNAL_SERVER_ERROR);
         }
     }
 }

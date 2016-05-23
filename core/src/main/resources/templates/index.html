@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>HTTP File Server</title>
     <style>
         html {
@@ -91,8 +92,8 @@
     <section style="max-width:250px;">
         <fieldset>
             <legend>Directory</legend>
-            <a href="$HOME$">Home</a>
-            <a href="..">Up</a>
+            <a class="button" href="$HOME$">Home</a>
+            <a class="button" href="..">Up</a>
         </fieldset>
 
         <fieldset>
@@ -182,6 +183,19 @@
         if (selectedFiles.length && confirm("Do you want to get a download list with the selected elements?")){
             createAndSubmitForm("getlist", '.txt', selectedFiles);
         }
+    });
+
+    var counter = 1;
+    var locations = document.querySelector('#locations');
+    document.querySelector('#addLocation').addEventListener("click", () => {
+        var i = document.createElement("input");
+        i.setAttribute('type', "file");
+        i.setAttribute('name', "files"+counter.toString());
+        i.setAttribute('style', "width: 200px");
+        counter++;
+        i.multiple = true;
+        locations.appendChild(document.createElement("br"));
+        locations.appendChild(i);
     });
 </script>
 </body>

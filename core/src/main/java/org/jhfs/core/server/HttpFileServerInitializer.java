@@ -3,6 +3,7 @@ package org.jhfs.core.server;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.stream.ChunkedWriteHandler;
@@ -38,6 +39,8 @@ class HttpFileServerInitializer extends ChannelInitializer<SocketChannel> {
     public void initChannel(SocketChannel ch) {
         ChannelPipeline pipeline = ch.pipeline();
         pipeline.addLast(new HttpServerCodec());
+        pipeline.addLast(new HttpContentCompressor());
+        pipeline.addLast(new HttpUploadServerHandler(configuration, logs, connections));
         pipeline.addLast(new HttpObjectAggregator(65536));
         pipeline.addLast(new ChunkedWriteHandler());
         pipeline.addLast(new FavIconHandler("images/favicon.ico"));
