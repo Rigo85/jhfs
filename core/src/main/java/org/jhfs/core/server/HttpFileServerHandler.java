@@ -37,7 +37,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.zip.GZIPOutputStream;
 
 import static io.netty.handler.codec.http.HttpMethod.GET;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
@@ -459,7 +458,7 @@ class HttpFileServerHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private void compressFiles(Collection<File> files, File output) throws IOException {
         logger.debug("Compressing " + files.size() + " to " + output.getAbsoluteFile());
         FileOutputStream fos = new FileOutputStream(output);
-        TarArchiveOutputStream taos = new TarArchiveOutputStream(new GZIPOutputStream(new BufferedOutputStream(fos)));
+        TarArchiveOutputStream taos = new TarArchiveOutputStream(new PackGZIPOutputStream(new BufferedOutputStream(fos)));
         taos.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_STAR);
         taos.setLongFileMode(TarArchiveOutputStream.LONGFILE_GNU);
         for (File f : files) {
