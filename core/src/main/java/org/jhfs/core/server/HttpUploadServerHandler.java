@@ -53,12 +53,12 @@ class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObject> {
     private static final Logger logger = LoggerFactory.getLogger(HttpUploadServerHandler.class);
     private static final HttpDataFactory factory = new DefaultHttpDataFactory(0L);
 
-    static {
-        DiskFileUpload.deleteOnExitTemporaryFile = true;
-        DiskFileUpload.baseDirectory = null;
-        DiskAttribute.deleteOnExitTemporaryFile = true;
-        DiskAttribute.baseDirectory = null;
-    }
+//    static {
+//        DiskFileUpload.deleteOnExitTemporaryFile = true;
+//        DiskFileUpload.baseDirectory = null;
+//        DiskAttribute.deleteOnExitTemporaryFile = true;
+//        DiskAttribute.baseDirectory = null;
+//    }
 
     private final TableView<Connection> connections;
     private final TextArea logs;
@@ -104,6 +104,8 @@ class HttpUploadServerHandler extends SimpleChannelInboundHandler<HttpObject> {
             if (msg instanceof HttpRequest) {
                 HttpRequest request = this.request = (HttpRequest) msg;
                 decoder = new HttpPostRequestDecoder(factory, request);
+                DiskFileUpload.deleteOnExitTemporaryFile = false;
+                DiskFileUpload.baseDirectory = Utils.uriToPath(configuration, uri).toString();
             } else if (decoder != null && msg instanceof HttpContent) {
                 HttpContent chunk = (HttpContent) msg;
                 decoder.offer(chunk);
